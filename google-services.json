@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "157942699599",
+    "project_id": "recipe-book-9eb60",
+    "storage_bucket": "recipe-book-9eb60.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:157942699599:android:ace6100336b5d70b87fc3a",
+        "android_client_info": {
+          "package_name": "com.dextertenchavez.RecipeBook"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "157942699599-drab70jm7k4j73um3d1o2h88i0n2ma9p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dextertenchavez.RecipeBook",
+            "certificate_hash": "26a8096d301e11198729fc5c4ca40169b4d19129"
+          }
+        },
+        {
+          "client_id": "157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDClf5nufKLTfQlR4U4k5QLvMgu3Vf-2jI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

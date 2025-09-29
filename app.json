@@ -2,28 +2,41 @@
   "expo": {
     "name": "Recipe-Book",
     "slug": "Recipe-Book",
+    "owner": "dextertenchavez",
+    "scheme": "recipebook",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dextertenchavez.RecipeBook"
     },
     "android": {
+      "package": "com.dextertenchavez.RecipeBook",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser"
+    ],
+    "extra": {
+      "googleWebClientId": "157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com",
+      "eas": {
+        "projectId": "acc01607-7779-467c-bef8-16d0249d3504"
+      }
     }
   }
 }
