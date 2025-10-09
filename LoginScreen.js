@@ -51,9 +51,7 @@ export default function LoginScreen({ navigation }) {
       />
       <Button title={loading ? 'Logging in…' : 'Login'} onPress={handleLogin} disabled={loading} />
 
-      <TouchableOpacity style={styles.googleButton} onPress={() => promptAsync()}>
-        <Text style={styles.googleButtonText}>Sign in with Google</Text>
-      </TouchableOpacity>
+     
 
       <Text style={styles.link} onPress={() => navigation.navigate('Register')}>
         No account? Register
@@ -67,6 +65,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, textAlign: 'center', marginBottom: 20 },
   input: { borderWidth: 1, marginBottom: 12, padding: 8, borderRadius: 5 },
   link: { marginTop: 16, color: 'blue', textAlign: 'center' },
-  googleButton: { backgroundColor: '#4285F4', padding: 12, borderRadius: 5, marginTop: 12 },
-  googleButtonText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
+  
 });

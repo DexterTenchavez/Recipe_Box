@@ -4,45 +4,39 @@ import { useEffect, useState } from 'react';
 import { FirebaseService } from './FirebaseService';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { makeRedirectUri } from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export function useGoogleSignIn() {
   const [userToken, setUserToken] = useState(null);
 
-// In your useGoogleSignIn.js file:
-
-const redirectUri = Platform.select({
-  android:
-    Constants.appOwnership === 'expo'
-      ? 'https://auth.expo.io/@dextertenchavez/Recipe-Book' // MUST be 'Recipe-Book'
-      : 'recipebook://redirect',                             // MUST be 'recipebook://redirect'
-  web: 'https://auth.expo.io/@dextertenchavez/Recipe-Book',  // MUST be 'Recipe-Book'
-});
-// ...
-
-
+  const redirectUri = makeRedirectUri({
+    useProxy: Constants.appOwnership === 'expo',
+    native: 'recipebook://redirect',
+  });
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: Platform.select({
       android:
         Constants.appOwnership === 'expo'
-          ? '157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com' // Web client ID for Expo Go
-          : '157942699599-drab70jm7k4j73um3d1o2h88i0n2ma9p.apps.googleusercontent.com', // Android client ID for standalone
+          ? '157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com' // Expo Go
+          : '157942699599-drab70jm7k4j73um3d1o2h88i0n2ma9p.apps.googleusercontent.com', // standalone Android
+      ios:
+        Constants.appOwnership === 'expo'
+          ? '157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com' // Expo Go
+          : '157942699599-ios-standalone-client-id.apps.googleusercontent.com', // standalone iOS
       web: '157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com',
     }),
     redirectUri,
   });
 
-    useEffect(() => {
+  useEffect(() => {
     if (response?.type === 'success') {
       const { id_token } = response.params;
       FirebaseService.loginWithGoogle(id_token)
         .then(user => setUserToken(user))
-        // MODIFIED CATCH BLOCK:
-        .catch(err => {
-            console.error('*** Google sign-in FAILED (Firebase error):', err);
-        });
+        .catch(err => console.error('*** Google sign-in FAILED (Firebase error):', err));
     }
   }, [response]);
 
