@@ -358,38 +358,71 @@ class FirebaseServiceClass {
 
   async deleteRecipe(recipeId) {
     try {
-      console.log('Deleting recipe:', recipeId);
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+        console.log('Deleting recipe:', recipeId);
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
 
-      // First, verify the user owns this recipe
-      const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
-      if (!recipeDoc.exists()) {
-        throw new Error('Recipe not found');
-      }
+        // First, verify the user owns this recipe
+        const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
+        if (!recipeDoc.exists()) {
+            throw new Error('Recipe not found');
+        }
 
-      const recipeData = recipeDoc.data();
-      if (recipeData.userId !== user.uid) {
-        throw new Error('You can only delete your own recipes');
-      }
+        const recipeData = recipeDoc.data();
+        if (recipeData.userId !== user.uid) {
+            throw new Error('You can only delete your own recipes');
+        }
 
-      // Delete the recipe
-      await deleteDoc(doc(db, 'recipes', recipeId));
-      console.log('Recipe deleted successfully');
-      
-      return true;
+        // Delete any pinned versions FIRST (before deleting the main recipe)
+        await this.deletePinnedRecipeFromAllUsers(recipeId);
+        
+        // Then delete the main recipe
+        await deleteDoc(doc(db, 'recipes', recipeId));
+        
+        console.log('Recipe and pinned versions deleted successfully');
+        return true;
     } catch (error) {
-      console.error('Error deleting recipe:', error);
-      console.error('Error code:', error.code);
-      
-      if (error.code === 'permission-denied') {
-        throw new Error('Permission denied: Cannot delete recipe. Please make sure you are logged in.');
-      }
-      throw new Error(`Failed to delete recipe: ${error.message}`);
+        console.error('Error deleting recipe:', error);
+        console.error('Error code:', error.code);
+        
+        if (error.code === 'permission-denied') {
+            throw new Error('Permission denied: Cannot delete recipe. Please check your Firestore security rules.');
+        }
+        throw new Error(`Failed to delete recipe: ${error.message}`);
     }
-  }
+}
+
+async deletePinnedRecipeFromAllUsers(recipeId) {
+    try {
+        console.log('Cleaning up pinned recipes for:', recipeId);
+        
+        // Delete from current user's pinned recipes
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const pinnedCollection = collection(db, 'users', user.uid, 'pinnedRecipes');
+        const q = query(pinnedCollection, where('originalRecipeId', '==', recipeId));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            console.log('No pinned recipes found to delete');
+            return;
+        }
+
+        const deletePromises = [];
+        querySnapshot.forEach((doc) => {
+            deletePromises.push(deleteDoc(doc.ref));
+        });
+
+        await Promise.all(deletePromises);
+        console.log(`Deleted ${deletePromises.length} pinned versions of recipe:`, recipeId);
+    } catch (error) {
+        console.error('Error deleting pinned recipes:', error);
+        // Don't throw error here - we don't want to fail the main delete if pinned delete fails
+    }
+}
 
   // ---------- Pinned Recipes Management ----------
   async pinRecipe(recipe) {

@@ -84,27 +84,28 @@ Shared from Recipe Book App 🍳
     };
 
     const handleDeleteRecipe = () => {
-        Alert.alert(
-            'Delete Recipe',
-            `Are you sure you want to delete "${recipe.title}"?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await FirebaseService.deleteRecipe(recipe.id);
-                            Alert.alert('Success', 'Recipe deleted successfully!');
-                            navigation.goBack();
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to delete recipe: ' + error.message);
-                        }
+    Alert.alert(
+        'Delete Recipe',
+        `Are you sure you want to delete "${recipe.title}"? This will also remove it from all pinned lists.`,
+        [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await FirebaseService.deleteRecipe(recipe.id);
+                        Alert.alert('Success', 'Recipe deleted successfully!');
+                        navigation.goBack();
+                    } catch (error) {
+                        console.error('Delete error:', error);
+                        Alert.alert('Error', 'Failed to delete recipe: ' + error.message);
                     }
                 }
-            ]
-        );
-    };
+            }
+        ]
+    );
+};
 
     const speakRecipe = async () => {
         try {
