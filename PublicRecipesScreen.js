@@ -6,7 +6,8 @@ import {
     TouchableOpacity, 
     FlatList, 
     Alert,
-    ActivityIndicator
+    ActivityIndicator,
+    TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FirebaseService } from './FirebaseService';
@@ -17,6 +18,8 @@ export default function PublicRecipesScreen({ navigation }) {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [speakingRecipeId, setSpeakingRecipeId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [pinnedRecipes, setPinnedRecipes] = useState(new Set());
 
     useEffect(() => {
         loadPublicRecipes();
@@ -32,6 +35,11 @@ export default function PublicRecipesScreen({ navigation }) {
             setLoading(true);
             const publicRecipes = await FirebaseService.getPublicRecipes();
             setRecipes(publicRecipes);
+            
+            // Load pinned recipes to show which ones are already pinned
+            const pinned = await FirebaseService.getPinnedRecipes();
+            const pinnedIds = new Set(pinned.map(recipe => recipe.id));
+            setPinnedRecipes(pinnedIds);
         } catch (error) {
             Alert.alert('Error', 'Failed to load public recipes: ' + error.message);
         } finally {
@@ -96,11 +104,49 @@ export default function PublicRecipesScreen({ navigation }) {
         setSpeakingRecipeId(null);
     };
 
+    const handlePinRecipe = async (recipe) => {
+        try {
+            // Check if already pinned locally first
+            if (pinnedRecipes.has(recipe.id)) {
+                Alert.alert('Already Pinned', 'This recipe is already pinned to your home screen!');
+                return;
+            }
+
+            await FirebaseService.pinRecipe(recipe);
+            
+            // Update local state
+            setPinnedRecipes(prev => new Set(prev).add(recipe.id));
+            
+            Alert.alert('Success', 'Recipe pinned to your home screen!');
+        } catch (error) {
+            console.error('Pin error:', error);
+            
+            // Handle specific error cases
+            if (error.message && error.message.includes('already pinned')) {
+                Alert.alert('Already Pinned', 'This recipe is already pinned to your home screen!');
+                // Update local state to reflect reality
+                setPinnedRecipes(prev => new Set(prev).add(recipe.id));
+            } else {
+                Alert.alert('Error', 'Failed to pin recipe: ' + (error.message || 'Unknown error'));
+            }
+        }
+    };
+
+    const filteredRecipes = recipes.filter(recipe =>
+        recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (recipe.tags && recipe.tags.some(tag => 
+            tag.toLowerCase().includes(searchQuery.toLowerCase())
+        )) ||
+        recipe.userName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     const renderRecipeItem = ({ item }) => (
         <TouchableOpacity 
             style={[
                 styles.recipeCard,
-                speakingRecipeId === item.id && styles.speakingCard
+                speakingRecipeId === item.id && styles.speakingCard,
+                pinnedRecipes.has(item.id) && styles.pinnedCard
             ]}
             onPress={() => navigation.navigate('RecipeDetails', { recipe: item })}
             onLongPress={() => speakRecipePreview(item)}
@@ -109,17 +155,30 @@ export default function PublicRecipesScreen({ navigation }) {
             <View style={styles.recipeHeader}>
                 <View style={styles.titleContainer}>
                     <Text style={styles.recipeTitle}>{item.title}</Text>
-                    <TouchableOpacity 
-                        style={[
-                            styles.voiceButton,
-                            speakingRecipeId === item.id && styles.voiceButtonActive
-                        ]}
-                        onPress={() => speakRecipePreview(item)}
-                    >
-                        <Text style={styles.voiceButtonIcon}>
-                            {speakingRecipeId === item.id ? '🔊' : '🔈'}
-                        </Text>
-                    </TouchableOpacity>
+                    <View style={styles.recipeActions}>
+                        <TouchableOpacity 
+                            style={[
+                                styles.pinButton,
+                                pinnedRecipes.has(item.id) && styles.pinButtonActive
+                            ]}
+                            onPress={() => handlePinRecipe(item)}
+                        >
+                            <Text style={styles.pinButtonText}>
+                                {pinnedRecipes.has(item.id) ? '📌' : '📍'}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[
+                                styles.voiceButton,
+                                speakingRecipeId === item.id && styles.voiceButtonActive
+                            ]}
+                            onPress={() => speakRecipePreview(item)}
+                        >
+                            <Text style={styles.voiceButtonIcon}>
+                                {speakingRecipeId === item.id ? '🔊' : '🔈'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
                 <Text style={styles.recipeAuthor}>by {item.userName}</Text>
             </View>
@@ -139,6 +198,11 @@ export default function PublicRecipesScreen({ navigation }) {
                     <Text style={styles.metaIcon}>👥</Text>
                     <Text style={styles.recipeServings}>{item.servings || 1} servings</Text>
                 </View>
+                {pinnedRecipes.has(item.id) && (
+                    <View style={styles.pinnedBadge}>
+                        <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                    </View>
+                )}
                 {item.isShared && (
                     <View style={styles.sharedBadge}>
                         <Text style={styles.sharedBadgeText}>Public</Text>
@@ -192,10 +256,32 @@ export default function PublicRecipesScreen({ navigation }) {
                 </View>
             </View>
 
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search community recipes..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholderTextColor="#999"
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity 
+                        style={styles.clearSearchButton}
+                        onPress={() => setSearchQuery('')}
+                    >
+                        <Text style={styles.clearSearchText}>✕</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
             {/* Voice Instructions */}
             <View style={styles.voiceInstructions}>
                 <Text style={styles.voiceInstructionsText}>
                     🔊 Tap speaker icon or press and hold any recipe to hear a preview
+                </Text>
+                <Text style={styles.pinInstructionsText}>
+                    📍 Tap pin icon to save recipe to your home screen
                 </Text>
             </View>
 
@@ -206,23 +292,27 @@ export default function PublicRecipesScreen({ navigation }) {
                         <ActivityIndicator size="large" color="#FF6B35" />
                         <Text style={styles.loadingText}>Loading community recipes...</Text>
                     </View>
-                ) : recipes.length === 0 ? (
+                ) : filteredRecipes.length === 0 ? (
                     <View style={styles.centerContent}>
                         <Text style={styles.emptyIcon}>🍳</Text>
-                        <Text style={styles.emptyStateText}>No public recipes yet!</Text>
-                        <Text style={styles.emptyStateSubtext}>
-                            Be the first to share a recipe with the community
+                        <Text style={styles.emptyStateText}>
+                            {searchQuery ? 'No recipes found' : 'No public recipes yet!'}
                         </Text>
-                        <TouchableOpacity 
-                            style={styles.addRecipeButton}
-                            onPress={() => navigation.navigate('AddRecipe')}
-                        >
-                            <Text style={styles.addRecipeButtonText}>+ Create Recipe</Text>
-                        </TouchableOpacity>
+                        <Text style={styles.emptyStateSubtext}>
+                            {searchQuery ? 'Try a different search term' : 'Be the first to share a recipe with the community'}
+                        </Text>
+                        {!searchQuery && (
+                            <TouchableOpacity 
+                                style={styles.addRecipeButton}
+                                onPress={() => navigation.navigate('AddRecipe')}
+                            >
+                                <Text style={styles.addRecipeButtonText}>+ Create Recipe</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     <FlatList
-                        data={recipes}
+                        data={filteredRecipes}
                         renderItem={renderRecipeItem}
                         keyExtractor={(item) => item.id}
                         style={styles.recipesList}
@@ -294,6 +384,34 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: '#FF6B35',
     },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#FFE5D9',
+    },
+    searchInput: {
+        flex: 1,
+        backgroundColor: '#FFF8F5',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        fontSize: 16,
+        color: '#2D2D2D',
+        borderWidth: 1,
+        borderColor: '#FFE5D9',
+    },
+    clearSearchButton: {
+        padding: 8,
+        marginLeft: 8,
+    },
+    clearSearchText: {
+        fontSize: 18,
+        color: '#666666',
+        fontWeight: 'bold',
+    },
     voiceInstructions: {
         backgroundColor: '#FF6B35',
         padding: 12,
@@ -305,6 +423,13 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '600',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    pinInstructionsText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '500',
         textAlign: 'center',
     },
     content: {
@@ -336,6 +461,10 @@ const styles = StyleSheet.create({
         shadowColor: '#17a2b8',
         shadowOpacity: 0.3,
     },
+    pinnedCard: {
+        borderLeftColor: '#FFD700',
+        backgroundColor: '#FFFDF0',
+    },
     recipeHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -354,6 +483,30 @@ const styles = StyleSheet.create({
         color: '#2D2D2D',
         flex: 1,
         marginRight: 8,
+    },
+    recipeActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    pinButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F0F0F0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    pinButtonActive: {
+        backgroundColor: '#FFD700',
+    },
+    pinButtonText: {
+        fontSize: 14,
     },
     voiceButton: {
         width: 32,
@@ -410,6 +563,17 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666666',
         fontWeight: '500',
+    },
+    pinnedBadge: {
+        backgroundColor: '#FFD700',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    pinnedBadgeText: {
+        fontSize: 10,
+        color: '#2D2D2D',
+        fontWeight: '600',
     },
     sharedBadge: {
         backgroundColor: '#FF6B35',

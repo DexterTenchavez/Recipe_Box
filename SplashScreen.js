@@ -17,7 +17,7 @@ export default function SplashScreen({ navigation }) {
             colors={['#FF7F50', '#FFB347']} // gradient colors like your mockup
             style={styles.container}
         >
-            <Text style={styles.title}>🍽Recipe Box</Text>
+            <Text style={styles.title}>Recipe Box</Text>
             <Text style={styles.subtitle}>Your culinary companion</Text>
         </LinearGradient>
     );

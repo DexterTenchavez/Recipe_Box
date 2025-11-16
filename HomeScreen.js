@@ -7,7 +7,8 @@ import {
     FlatList, 
     Alert,
     Share,
-    ActivityIndicator
+    ActivityIndicator,
+    TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,8 +17,10 @@ import { auth } from './firebaseConfig';
 
 export default function HomeScreen({ navigation }) {
     const [recipes, setRecipes] = useState([]);
+    const [pinnedRecipes, setPinnedRecipes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [user, setUser] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -29,6 +32,7 @@ export default function HomeScreen({ navigation }) {
             });
         }
         loadRecipes();
+        loadPinnedRecipes();
     }, []);
 
     const loadRecipes = async () => {
@@ -43,9 +47,19 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
+    const loadPinnedRecipes = async () => {
+        try {
+            const pinned = await FirebaseService.getPinnedRecipes();
+            setPinnedRecipes(pinned);
+        } catch (error) {
+            console.log('Error loading pinned recipes:', error.message);
+        }
+    };
+
     useFocusEffect(
         React.useCallback(() => {
             loadRecipes();
+            loadPinnedRecipes();
         }, [])
     );
 
@@ -119,7 +133,33 @@ Shared from Recipe Book App 🍳
         }
     };
 
-    const renderRecipeItem = ({ item }) => (
+    const handleUnpinRecipe = async (recipeId) => {
+        try {
+            await FirebaseService.unpinRecipe(recipeId);
+            loadPinnedRecipes();
+            Alert.alert('Success', 'Recipe unpinned!');
+        } catch (error) {
+            Alert.alert('Error', 'Failed to unpin recipe: ' + error.message);
+        }
+    };
+
+    const filteredRecipes = recipes.filter(recipe =>
+        recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (recipe.tags && recipe.tags.some(tag => 
+            tag.toLowerCase().includes(searchQuery.toLowerCase())
+        ))
+    );
+
+    const filteredPinnedRecipes = pinnedRecipes.filter(recipe =>
+        recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (recipe.tags && recipe.tags.some(tag => 
+            tag.toLowerCase().includes(searchQuery.toLowerCase())
+        ))
+    );
+
+    const renderRecipeItem = ({ item, isPinned = false }) => (
         <TouchableOpacity 
             style={styles.recipeCard}
             onPress={() => navigation.navigate('RecipeDetails', { recipe: item })}
@@ -127,24 +167,35 @@ Shared from Recipe Book App 🍳
             <View style={styles.recipeHeader}>
                 <Text style={styles.recipeTitle}>{item.title}</Text>
                 <View style={styles.recipeActions}>
-                    <TouchableOpacity 
-                        style={styles.quickShareButton}
-                        onPress={() => handleQuickShare(item)}
-                    >
-                        <Text style={styles.quickShareButtonText}>↗</Text>
-                    </TouchableOpacity>
-                    {user?.uid === item.userId && (
+                    {isPinned ? (
                         <TouchableOpacity 
-                            style={[
-                                styles.shareButton, 
-                                item.isShared && styles.sharedButton
-                            ]}
-                            onPress={() => handleShareRecipe(item)}
+                            style={styles.unpinButton}
+                            onPress={() => handleUnpinRecipe(item.id)}
                         >
-                            <Text style={styles.shareButtonText}>
-                                {item.isShared ? 'Published' : 'Publish'}
-                            </Text>
+                            <Text style={styles.unpinButtonText}>📌</Text>
                         </TouchableOpacity>
+                    ) : (
+                        <>
+                            <TouchableOpacity 
+                                style={styles.quickShareButton}
+                                onPress={() => handleQuickShare(item)}
+                            >
+                                <Text style={styles.quickShareButtonText}>↗</Text>
+                            </TouchableOpacity>
+                            {user?.uid === item.userId && (
+                                <TouchableOpacity 
+                                    style={[
+                                        styles.shareButton, 
+                                        item.isShared && styles.sharedButton
+                                    ]}
+                                    onPress={() => handleShareRecipe(item)}
+                                >
+                                    <Text style={styles.shareButtonText}>
+                                        {item.isShared ? 'Published' : 'Publish'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </>
                     )}
                 </View>
             </View>
@@ -160,12 +211,22 @@ Shared from Recipe Book App 🍳
                     <Text style={styles.metaIcon}>👥</Text>
                     <Text style={styles.recipeServings}>{item.servings} servings</Text>
                 </View>
-                {item.isShared && (
+                {isPinned && (
+                    <View style={styles.pinnedBadge}>
+                        <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                    </View>
+                )}
+                {!isPinned && item.isShared && (
                     <View style={styles.sharedBadge}>
                         <Text style={styles.sharedBadgeText}>Public</Text>
                     </View>
                 )}
             </View>
+            {isPinned && (
+                <Text style={styles.recipeAuthor}>
+                    by {item.userName}
+                </Text>
+            )}
             <Text style={styles.recipeDate}>
                 Created: {item.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
             </Text>
@@ -193,47 +254,90 @@ Shared from Recipe Book App 🍳
                 </View>
             </View>
 
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search recipes..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholderTextColor="#999"
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity 
+                        style={styles.clearSearchButton}
+                        onPress={() => setSearchQuery('')}
+                    >
+                        <Text style={styles.clearSearchText}>✕</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
             {/* Content */}
             <View style={styles.content}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>My Recipes</Text>
-                    <TouchableOpacity 
-                        style={styles.addButton}
-                        onPress={() => navigation.navigate('AddRecipe')}
-                    >
-                        <Text style={styles.addButtonText}>+ Add Recipe</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {loading ? (
-                    <View style={styles.centerContent}>
-                        <ActivityIndicator size="large" color="#FF6B35" />
-                        <Text style={styles.loadingText}>Loading your recipes...</Text>
+                {/* Pinned Recipes Section */}
+                {pinnedRecipes.length > 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>📌 Pinned Recipes</Text>
+                        </View>
+                        <FlatList
+                            data={filteredPinnedRecipes}
+                            renderItem={({ item }) => renderRecipeItem({ item, isPinned: true })}
+                            keyExtractor={(item) => `pinned-${item.id}`}
+                            style={styles.recipesList}
+                            showsVerticalScrollIndicator={false}
+                            scrollEnabled={false}
+                        />
                     </View>
-                ) : recipes.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyIcon}>🍳</Text>
-                        <Text style={styles.emptyStateText}>No recipes yet!</Text>
-                        <Text style={styles.emptyStateSubtext}>
-                            Start building your recipe collection
-                        </Text>
+                )}
+
+                {/* My Recipes Section */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>My Recipes</Text>
                         <TouchableOpacity 
                             style={styles.addButton}
                             onPress={() => navigation.navigate('AddRecipe')}
                         >
-                            <Text style={styles.addButtonText}>+ Add Your First Recipe</Text>
+                            <Text style={styles.addButtonText}>+ Add Recipe</Text>
                         </TouchableOpacity>
                     </View>
-                ) : (
-                    <FlatList
-                        data={recipes}
-                        renderItem={renderRecipeItem}
-                        keyExtractor={(item) => item.id}
-                        style={styles.recipesList}
-                        showsVerticalScrollIndicator={false}
-                        contentContainerStyle={styles.listContent}
-                    />
-                )}
+
+                    {loading ? (
+                        <View style={styles.centerContent}>
+                            <ActivityIndicator size="large" color="#FF6B35" />
+                            <Text style={styles.loadingText}>Loading your recipes...</Text>
+                        </View>
+                    ) : filteredRecipes.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyIcon}>🍳</Text>
+                            <Text style={styles.emptyStateText}>
+                                {searchQuery ? 'No recipes found' : 'No recipes yet!'}
+                            </Text>
+                            <Text style={styles.emptyStateSubtext}>
+                                {searchQuery ? 'Try a different search term' : 'Start building your recipe collection'}
+                            </Text>
+                            {!searchQuery && (
+                                <TouchableOpacity 
+                                    style={styles.addButton}
+                                    onPress={() => navigation.navigate('AddRecipe')}
+                                >
+                                    <Text style={styles.addButtonText}>+ Add Your First Recipe</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={filteredRecipes}
+                            renderItem={renderRecipeItem}
+                            keyExtractor={(item) => item.id}
+                            style={styles.recipesList}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={styles.listContent}
+                        />
+                    )}
+                </View>
             </View>
         </SafeAreaView>
     );
@@ -298,25 +402,56 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 12,
     },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#FFE5D9',
+    },
+    searchInput: {
+        flex: 1,
+        backgroundColor: '#FFF8F5',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        fontSize: 16,
+        color: '#2D2D2D',
+        borderWidth: 1,
+        borderColor: '#FFE5D9',
+    },
+    clearSearchButton: {
+        padding: 8,
+        marginLeft: 8,
+    },
+    clearSearchText: {
+        fontSize: 18,
+        color: '#666666',
+        fontWeight: 'bold',
+    },
     content: {
         flex: 1,
         padding: 20,
+    },
+    section: {
+        marginBottom: 24,
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 16,
     },
     sectionTitle: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#2D2D2D',
     },
     addButton: {
         backgroundColor: '#FF6B35',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         borderRadius: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -330,9 +465,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     centerContent: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        padding: 20,
     },
     recipeCard: {
         backgroundColor: '#FFFFFF',
@@ -402,6 +537,22 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
     },
+    unpinButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFD700',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    unpinButtonText: {
+        fontSize: 16,
+    },
     recipeDescription: {
         fontSize: 14,
         color: '#666666',
@@ -412,7 +563,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     metaItem: {
         flexDirection: 'row',
@@ -443,6 +594,23 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '600',
     },
+    pinnedBadge: {
+        backgroundColor: '#FFD700',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    pinnedBadgeText: {
+        fontSize: 10,
+        color: '#2D2D2D',
+        fontWeight: '600',
+    },
+    recipeAuthor: {
+        fontSize: 12,
+        color: '#666666',
+        fontStyle: 'italic',
+        marginBottom: 4,
+    },
     recipeDate: {
         fontSize: 12,
         color: '#999999',
@@ -455,7 +623,6 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     emptyState: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,

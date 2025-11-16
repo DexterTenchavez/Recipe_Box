@@ -391,6 +391,168 @@ class FirebaseServiceClass {
     }
   }
 
+  // ---------- Pinned Recipes Management ----------
+  async pinRecipe(recipe) {
+    try {
+      console.log('Pinning recipe:', recipe.id);
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Check if recipe is already pinned
+      const isAlreadyPinned = await this.isRecipePinned(recipe.id);
+      if (isAlreadyPinned) {
+        throw new Error('Recipe is already pinned');
+      }
+
+      const pinnedRecipe = {
+        ...recipe,
+        pinnedBy: user.uid,
+        pinnedAt: serverTimestamp(),
+        originalRecipeId: recipe.id,
+        // Store essential recipe data
+        title: recipe.title,
+        description: recipe.description,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        prepTime: recipe.prepTime,
+        cookTime: recipe.cookTime,
+        totalTime: recipe.totalTime,
+        servings: recipe.servings,
+        userName: recipe.userName,
+        userEmail: recipe.userEmail,
+        userId: recipe.userId,
+        isShared: recipe.isShared,
+        tags: recipe.tags || []
+      };
+
+      // Remove Firestore timestamp objects that can't be stored in nested documents
+      delete pinnedRecipe.createdAt;
+      delete pinnedRecipe.updatedAt;
+      delete pinnedRecipe.sharedAt;
+
+      // Store in user's pinned recipes collection
+      const pinnedCollection = collection(db, 'users', user.uid, 'pinnedRecipes');
+      await addDoc(pinnedCollection, pinnedRecipe);
+
+      console.log('Recipe pinned successfully');
+      return true;
+    } catch (error) {
+      console.error('Error pinning recipe:', error);
+      console.error('Error code:', error.code);
+      
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied: Cannot pin recipe. Please make sure you are logged in.');
+      }
+      throw new Error(`Failed to pin recipe: ${error.message}`);
+    }
+  }
+
+  async unpinRecipe(recipeId) {
+    try {
+      console.log('Unpinning recipe:', recipeId);
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Find the pinned recipe document
+      const pinnedCollection = collection(db, 'users', user.uid, 'pinnedRecipes');
+      const q = query(pinnedCollection, where('originalRecipeId', '==', recipeId));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        throw new Error('Pinned recipe not found');
+      }
+
+      // Delete the pinned recipe
+      querySnapshot.forEach(async (doc) => {
+        await deleteDoc(doc.ref);
+      });
+
+      console.log('Recipe unpinned successfully');
+      return true;
+    } catch (error) {
+      console.error('Error unpinning recipe:', error);
+      console.error('Error code:', error.code);
+      
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied: Cannot unpin recipe. Please make sure you are logged in.');
+      }
+      throw new Error(`Failed to unpin recipe: ${error.message}`);
+    }
+  }
+
+  async getPinnedRecipes() {
+    try {
+      console.log('Fetching pinned recipes...');
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const pinnedCollection = collection(db, 'users', user.uid, 'pinnedRecipes');
+      const q = query(pinnedCollection, orderBy('pinnedAt', 'desc'));
+      
+      const querySnapshot = await getDocs(q);
+      const pinnedRecipes = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        pinnedRecipes.push({
+          id: doc.id,
+          ...data,
+          // Ensure all required fields have defaults
+          title: data.title || 'Untitled Recipe',
+          ingredients: data.ingredients || [],
+          instructions: data.instructions || [],
+          prepTime: data.prepTime || 0,
+          cookTime: data.cookTime || 0,
+          totalTime: data.totalTime || 0,
+          servings: data.servings || 1,
+          userName: data.userName || 'Anonymous',
+          isShared: data.isShared || false
+        });
+      });
+
+      console.log(`Found ${pinnedRecipes.length} pinned recipes`);
+      return pinnedRecipes;
+    } catch (error) {
+      console.error('Error getting pinned recipes:', error);
+      console.error('Error code:', error.code);
+      
+      // If permission denied or collection doesn't exist, return empty array
+      if (error.code === 'permission-denied' || error.code === 'not-found') {
+        console.log('No pinned recipes collection found, returning empty array');
+        return [];
+      } else if (error.code === 'unavailable') {
+        throw new Error('Network error: Please check your internet connection.');
+      } else {
+        console.log('Other error, returning empty array:', error.message);
+        return [];
+      }
+    }
+  }
+
+  async isRecipePinned(recipeId) {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        return false;
+      }
+
+      const pinnedCollection = collection(db, 'users', user.uid, 'pinnedRecipes');
+      const q = query(pinnedCollection, where('originalRecipeId', '==', recipeId));
+      const querySnapshot = await getDocs(q);
+
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error('Error checking if recipe is pinned:', error);
+      return false;
+    }
+  }
+
   // Google Sign-In
   async loginWithGoogle(id_token) {
     try {
