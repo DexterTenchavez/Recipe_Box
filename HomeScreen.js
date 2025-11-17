@@ -19,9 +19,11 @@ import { auth } from './firebaseConfig';
 export default function HomeScreen({ navigation }) {
     const [recipes, setRecipes] = useState([]);
     const [pinnedRecipes, setPinnedRecipes] = useState([]);
+    const [sharedRecipes, setSharedRecipes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [user, setUser] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeTab, setActiveTab] = useState('myRecipes'); // 'myRecipes', 'pinned', 'shared'
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -32,9 +34,16 @@ export default function HomeScreen({ navigation }) {
                 uid: currentUser.uid
             });
         }
-        loadRecipes();
-        loadPinnedRecipes();
+        loadAllData();
     }, []);
+
+    const loadAllData = async () => {
+        await Promise.all([
+            loadRecipes(),
+            loadPinnedRecipes(),
+            loadSharedRecipes()
+        ]);
+    };
 
     const loadRecipes = async () => {
         try {
@@ -57,10 +66,18 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
+    const loadSharedRecipes = async () => {
+        try {
+            const shared = await FirebaseService.getSharedRecipes();
+            setSharedRecipes(shared);
+        } catch (error) {
+            console.log('Error loading shared recipes:', error.message);
+        }
+    };
+
     useFocusEffect(
         React.useCallback(() => {
-            loadRecipes();
-            loadPinnedRecipes();
+            loadAllData();
         }, [])
     );
 
@@ -100,6 +117,10 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
+    const handleUserShare = (recipe) => {
+        navigation.navigate('UserShare', { recipe });
+    };
+
     const handleQuickShare = async (recipe) => {
         try {
             const shareContent = `
@@ -135,41 +156,70 @@ Shared from Recipe Book App 🍳
     };
 
     const handleUnpinRecipe = async (pinnedRecipeId) => {
-    try {
-        await FirebaseService.unpinRecipe(pinnedRecipeId);
-        loadPinnedRecipes();
-        Alert.alert('Success', 'Recipe unpinned!');
-    } catch (error) {
-        if (error.message.includes('Pinned recipe not found')) {
-            // Recipe was already deleted, just refresh the list
-            console.log('Recipe already removed, refreshing list...');
+        try {
+            await FirebaseService.unpinRecipe(pinnedRecipeId);
             loadPinnedRecipes();
-        } else {
-            Alert.alert('Error', 'Failed to unpin recipe: ' + error.message);
+            Alert.alert('Success', 'Recipe unpinned!');
+        } catch (error) {
+            if (error.message.includes('Pinned recipe not found')) {
+                // Recipe was already deleted, just refresh the list
+                console.log('Recipe already removed, refreshing list...');
+                loadPinnedRecipes();
+            } else {
+                Alert.alert('Error', 'Failed to unpin recipe: ' + error.message);
+            }
         }
-    }
-};
+    };
 
-    const filteredRecipes = recipes.filter(recipe =>
-        recipe.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recipe.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (recipe.tags && recipe.tags.some(tag => 
-            tag.toLowerCase().includes(searchQuery.toLowerCase())
-        ))
-    );
+    const handleRemoveSharedRecipe = async (sharedRecipeId) => {
+        try {
+            await FirebaseService.removeSharedRecipe(sharedRecipeId);
+            loadSharedRecipes();
+            Alert.alert('Success', 'Shared recipe removed!');
+        } catch (error) {
+            Alert.alert('Error', 'Failed to remove shared recipe: ' + error.message);
+        }
+    };
 
-    const filteredPinnedRecipes = pinnedRecipes.filter(recipe =>
-        recipe.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recipe.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (recipe.tags && recipe.tags.some(tag => 
-            tag.toLowerCase().includes(searchQuery.toLowerCase())
-        ))
-    );
+    // Filter recipes based on search query and active tab
+    const getFilteredRecipes = () => {
+        let recipesToFilter = [];
+        
+        switch (activeTab) {
+            case 'myRecipes':
+                recipesToFilter = recipes;
+                break;
+            case 'pinned':
+                recipesToFilter = pinnedRecipes;
+                break;
+            case 'shared':
+                recipesToFilter = sharedRecipes.map(shared => ({
+                    ...shared.recipeData,
+                    id: shared.id,
+                    sharedBy: shared.sharedByUserName,
+                    sharedAt: shared.sharedAt,
+                    isSharedRecipe: true
+                }));
+                break;
+        }
 
-    const renderRecipeItem = ({ item, isPinned = false }) => (
+        return recipesToFilter.filter(recipe =>
+            recipe.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            recipe.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (recipe.tags && recipe.tags.some(tag => 
+                tag.toLowerCase().includes(searchQuery.toLowerCase())
+            )) ||
+            (recipe.sharedBy && recipe.sharedBy.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+    };
+
+    const renderRecipeItem = ({ item, isPinned = false, isShared = false }) => (
         <TouchableOpacity 
             style={styles.recipeCard}
-            onPress={() => navigation.navigate('RecipeDetails', { recipe: item })}
+            onPress={() => navigation.navigate('RecipeDetails', { 
+                recipe: item,
+                isSharedRecipe: isShared 
+            })}
         >
             <View style={styles.recipeHeader}>
                 <Text style={styles.recipeTitle}>{item.title}</Text>
@@ -181,8 +231,21 @@ Shared from Recipe Book App 🍳
                         >
                             <Text style={styles.unpinButtonText}>📌</Text>
                         </TouchableOpacity>
+                    ) : isShared ? (
+                        <TouchableOpacity 
+                            style={styles.removeSharedButton}
+                            onPress={() => handleRemoveSharedRecipe(item.id)}
+                        >
+                            <Text style={styles.removeSharedButtonText}>🗑️</Text>
+                        </TouchableOpacity>
                     ) : (
                         <>
+                            <TouchableOpacity 
+                                style={styles.userShareButton}
+                                onPress={() => handleUserShare(item)}
+                            >
+                                <Text style={styles.userShareButtonText}>👤</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.quickShareButton}
                                 onPress={() => handleQuickShare(item)}
@@ -223,9 +286,14 @@ Shared from Recipe Book App 🍳
                         <Text style={styles.pinnedBadgeText}>Pinned</Text>
                     </View>
                 )}
-                {!isPinned && item.isShared && (
+                {isShared && (
                     <View style={styles.sharedBadge}>
-                        <Text style={styles.sharedBadgeText}>Public</Text>
+                        <Text style={styles.sharedBadgeText}>Shared</Text>
+                    </View>
+                )}
+                {!isPinned && !isShared && item.isShared && (
+                    <View style={styles.publicBadge}>
+                        <Text style={styles.publicBadgeText}>Public</Text>
                     </View>
                 )}
             </View>
@@ -234,18 +302,53 @@ Shared from Recipe Book App 🍳
                     by {item.userName || 'Unknown'}
                 </Text>
             )}
+            {isShared && (
+                <Text style={styles.recipeAuthor}>
+                    Shared by {item.sharedBy || 'Unknown'}
+                </Text>
+            )}
             <Text style={styles.recipeDate}>
-                {isPinned ? 'Pinned' : 'Created'}: {item.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
+                {isPinned ? 'Pinned' : isShared ? 'Shared' : 'Created'}: {' '}
+                {item.createdAt?.toDate?.()?.toLocaleDateString() || 
+                 item.sharedAt?.toLocaleDateString() || 
+                 'Unknown'}
             </Text>
         </TouchableOpacity>
     );
 
-    const renderContent = () => {
+    const renderTabContent = () => {
+        const filteredRecipes = getFilteredRecipes();
+
         if (loading) {
             return (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" color="#FF6B35" />
-                    <Text style={styles.loadingText}>Loading your recipes...</Text>
+                    <Text style={styles.loadingText}>Loading recipes...</Text>
+                </View>
+            );
+        }
+
+        if (filteredRecipes.length === 0) {
+            return (
+                <View style={styles.emptyState}>
+                    <Text style={styles.emptyIcon}>
+                        {activeTab === 'myRecipes' ? '🍳' : 
+                         activeTab === 'pinned' ? '📌' : '🎁'}
+                    </Text>
+                    <Text style={styles.emptyStateText}>
+                        {searchQuery ? 'No recipes found' : getEmptyStateMessage()}
+                    </Text>
+                    <Text style={styles.emptyStateSubtext}>
+                        {searchQuery ? 'Try a different search term' : getEmptyStateSubtext()}
+                    </Text>
+                    {!searchQuery && activeTab === 'myRecipes' && (
+                        <TouchableOpacity 
+                            style={styles.addButton}
+                            onPress={() => navigation.navigate('AddRecipe')}
+                        >
+                            <Text style={styles.addButtonText}>+ Add Your First Recipe</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             );
         }
@@ -256,60 +359,43 @@ Shared from Recipe Book App 🍳
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Pinned Recipes Section */}
-                {filteredPinnedRecipes.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>📌 Pinned Recipes</Text>
-                        </View>
-                        {filteredPinnedRecipes.map((item) => (
-                            <View key={`pinned-${item.id}`}>
-                                {renderRecipeItem({ item, isPinned: true })}
-                            </View>
-                        ))}
+                {filteredRecipes.map((item) => (
+                    <View key={item.id}>
+                        {renderRecipeItem({ 
+                            item, 
+                            isPinned: activeTab === 'pinned',
+                            isShared: activeTab === 'shared'
+                        })}
                     </View>
-                )}
-
-                {/* My Recipes Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>My Recipes</Text>
-                        <TouchableOpacity 
-                            style={styles.addButton}
-                            onPress={() => navigation.navigate('AddRecipe')}
-                        >
-                            <Text style={styles.addButtonText}>+ Add Recipe</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {filteredRecipes.length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyIcon}>🍳</Text>
-                            <Text style={styles.emptyStateText}>
-                                {searchQuery ? 'No recipes found' : 'No recipes yet!'}
-                            </Text>
-                            <Text style={styles.emptyStateSubtext}>
-                                {searchQuery ? 'Try a different search term' : 'Start building your recipe collection'}
-                            </Text>
-                            {!searchQuery && (
-                                <TouchableOpacity 
-                                    style={styles.addButton}
-                                    onPress={() => navigation.navigate('AddRecipe')}
-                                >
-                                    <Text style={styles.addButtonText}>+ Add Your First Recipe</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    ) : (
-                        filteredRecipes.map((item) => (
-                            <View key={item.id}>
-                                {renderRecipeItem({ item, isPinned: false })}
-                            </View>
-                        ))
-                    )}
-                </View>
+                ))}
             </ScrollView>
         );
+    };
+
+    const getEmptyStateMessage = () => {
+        switch (activeTab) {
+            case 'myRecipes':
+                return 'No recipes yet!';
+            case 'pinned':
+                return 'No pinned recipes!';
+            case 'shared':
+                return 'No shared recipes!';
+            default:
+                return 'No recipes found';
+        }
+    };
+
+    const getEmptyStateSubtext = () => {
+        switch (activeTab) {
+            case 'myRecipes':
+                return 'Start building your recipe collection';
+            case 'pinned':
+                return 'Pin recipes from the community to see them here';
+            case 'shared':
+                return 'Recipes shared with you will appear here';
+            default:
+                return '';
+        }
     };
 
     return (
@@ -337,7 +423,7 @@ Shared from Recipe Book App 🍳
             <View style={styles.searchContainer}>
                 <TextInput
                     style={styles.searchInput}
-                    placeholder="Search recipes..."
+                    placeholder={`Search ${activeTab === 'myRecipes' ? 'my' : activeTab} recipes...`}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     placeholderTextColor="#999"
@@ -352,9 +438,49 @@ Shared from Recipe Book App 🍳
                 )}
             </View>
 
+            {/* Tabs */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity 
+                    style={[styles.tab, activeTab === 'myRecipes' && styles.activeTab]}
+                    onPress={() => setActiveTab('myRecipes')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'myRecipes' && styles.activeTabText]}>
+                        My Recipes ({recipes.length})
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={[styles.tab, activeTab === 'pinned' && styles.activeTab]}
+                    onPress={() => setActiveTab('pinned')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'pinned' && styles.activeTabText]}>
+                        Pinned ({pinnedRecipes.length})
+                    </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={[styles.tab, activeTab === 'shared' && styles.activeTab]}
+                    onPress={() => setActiveTab('shared')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'shared' && styles.activeTabText]}>
+                        Shared ({sharedRecipes.length})
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Add Recipe Button for My Recipes tab */}
+            {activeTab === 'myRecipes' && (
+                <View style={styles.addRecipeSection}>
+                    <TouchableOpacity 
+                        style={styles.addButtonLarge}
+                        onPress={() => navigation.navigate('AddRecipe')}
+                    >
+                        <Text style={styles.addButtonLargeText}>+ Add New Recipe</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             {/* Content */}
             <View style={styles.content}>
-                {renderContent()}
+                {renderTabContent()}
             </View>
         </SafeAreaView>
     );
@@ -447,6 +573,52 @@ const styles = StyleSheet.create({
         color: '#666666',
         fontWeight: 'bold',
     },
+    tabContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#FFE5D9',
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 16,
+        alignItems: 'center',
+        borderBottomWidth: 3,
+        borderBottomColor: 'transparent',
+    },
+    activeTab: {
+        borderBottomColor: '#FF6B35',
+    },
+    tabText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#666666',
+    },
+    activeTabText: {
+        color: '#FF6B35',
+    },
+    addRecipeSection: {
+        padding: 16,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#FFE5D9',
+    },
+    addButtonLarge: {
+        backgroundColor: '#FF6B35',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    addButtonLargeText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 16,
+    },
     content: {
         flex: 1,
     },
@@ -456,36 +628,6 @@ const styles = StyleSheet.create({
     scrollContent: {
         padding: 20,
         paddingBottom: 40,
-    },
-    section: {
-        marginBottom: 24,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#2D2D2D',
-    },
-    addButton: {
-        backgroundColor: '#FF6B35',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    addButtonText: {
-        color: '#FFFFFF',
-        fontWeight: '600',
-        fontSize: 14,
     },
     centerContent: {
         flex: 1,
@@ -523,6 +665,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
+    },
+    userShareButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#28a745',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    userShareButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
     quickShareButton: {
         width: 36,
@@ -577,6 +737,23 @@ const styles = StyleSheet.create({
     unpinButtonText: {
         fontSize: 16,
     },
+    removeSharedButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FF3B30',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    removeSharedButtonText: {
+        fontSize: 16,
+        color: '#FFFFFF',
+    },
     recipeDescription: {
         fontSize: 14,
         color: '#666666',
@@ -607,17 +784,6 @@ const styles = StyleSheet.create({
         color: '#666666',
         fontWeight: '500',
     },
-    sharedBadge: {
-        backgroundColor: '#FF6B35',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    sharedBadgeText: {
-        fontSize: 10,
-        color: '#FFFFFF',
-        fontWeight: '600',
-    },
     pinnedBadge: {
         backgroundColor: '#FFD700',
         paddingHorizontal: 8,
@@ -627,6 +793,28 @@ const styles = StyleSheet.create({
     pinnedBadgeText: {
         fontSize: 10,
         color: '#2D2D2D',
+        fontWeight: '600',
+    },
+    sharedBadge: {
+        backgroundColor: '#28a745',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    sharedBadgeText: {
+        fontSize: 10,
+        color: '#FFFFFF',
+        fontWeight: '600',
+    },
+    publicBadge: {
+        backgroundColor: '#FF6B35',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    publicBadgeText: {
+        fontSize: 10,
+        color: '#FFFFFF',
         fontWeight: '600',
     },
     recipeAuthor: {
@@ -647,9 +835,10 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     emptyState: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: 40,
     },
     emptyIcon: {
         fontSize: 48,
@@ -668,5 +857,16 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 20,
+    },
+    addButton: {
+        backgroundColor: '#FF6B35',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    addButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

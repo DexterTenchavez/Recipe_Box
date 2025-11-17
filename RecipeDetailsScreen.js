@@ -1,3 +1,4 @@
+// RecipeDetailsScreen.js (Enhanced)
 import React, { useState, useEffect } from 'react';
 import { 
     View, 
@@ -12,22 +13,77 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from './firebaseConfig';
 import { FirebaseService } from './FirebaseService';
-
-// Import Text-to-Speech
-import * as Speech from 'expo-speech';
+import { TTSService } from './TTSService';
 
 export default function RecipeDetailScreen({ route, navigation }) {
     const { recipe } = route.params;
     const currentUser = auth.currentUser;
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
+    const [highlightedSentence, setHighlightedSentence] = useState('');
+    const [ttsState, setTtsState] = useState({});
 
     // Stop speaking when component unmounts
     useEffect(() => {
         return () => {
-            Speech.stop();
+            TTSService.stop();
         };
     }, []);
+
+    // Update TTS state
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const state = TTSService.getCurrentState();
+            setTtsState(state);
+            setIsSpeaking(state.isSpeaking);
+            setIsPaused(state.isPaused);
+        }, 100);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleHighlight = (index, sentence) => {
+        setHighlightedSentence(sentence);
+        if (index === -1) {
+            setHighlightedSentence('');
+        }
+    };
+
+    const speakRecipe = async () => {
+        const recipeText = `
+            ${recipe.title}. 
+            ${recipe.description ? `${recipe.description}. ` : ''}
+            Preparation time: ${recipe.prepTime} minutes. 
+            Cook time: ${recipe.cookTime} minutes. 
+            Total time: ${recipe.totalTime} minutes. 
+            Servings: ${recipe.servings}. 
+            Ingredients: ${recipe.ingredients.map((ing, idx) => `${idx + 1}. ${ing}`).join('. ')}.
+            Instructions: ${recipe.instructions.map((inst, idx) => `Step ${idx + 1}. ${inst}`).join('. ')}.
+        `.trim();
+
+        await TTSService.speakWithHighlight(recipeText, handleHighlight);
+    };
+
+    const speakInstructionsOnly = async () => {
+        const instructionsText = recipe.instructions.map((inst, idx) => 
+            `Step ${idx + 1}. ${inst}`
+        ).join('. ');
+
+        await TTSService.speakWithHighlight(instructionsText, handleHighlight);
+    };
+
+    const handlePauseResume = () => {
+        if (isPaused) {
+            TTSService.resume();
+        } else {
+            TTSService.pause();
+        }
+    };
+
+    const stopSpeaking = () => {
+        TTSService.stop();
+    };
 
     const handleShareRecipe = async () => {
         try {
@@ -84,144 +140,50 @@ Shared from Recipe Book App 🍳
     };
 
     const handleDeleteRecipe = () => {
-    Alert.alert(
-        'Delete Recipe',
-        `Are you sure you want to delete "${recipe.title}"? This will also remove it from all pinned lists.`,
-        [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await FirebaseService.deleteRecipe(recipe.id);
-                        Alert.alert('Success', 'Recipe deleted successfully!');
-                        navigation.goBack();
-                    } catch (error) {
-                        console.error('Delete error:', error);
-                        Alert.alert('Error', 'Failed to delete recipe: ' + error.message);
+        Alert.alert(
+            'Delete Recipe',
+            `Are you sure you want to delete "${recipe.title}"? This will also remove it from all pinned lists.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await FirebaseService.deleteRecipe(recipe.id);
+                            Alert.alert('Success', 'Recipe deleted successfully!');
+                            navigation.goBack();
+                        } catch (error) {
+                            console.error('Delete error:', error);
+                            Alert.alert('Error', 'Failed to delete recipe: ' + error.message);
+                        }
                     }
                 }
-            }
-        ]
-    );
-};
-
-    const speakRecipe = async () => {
-        try {
-            if (isSpeaking) {
-                Speech.stop();
-                setIsSpeaking(false);
-                setCurrentStep(0);
-                return;
-            }
-
-            setIsSpeaking(true);
-            
-            // Create speech content
-            let speechContent = `Recipe: ${recipe.title}. `;
-            
-            if (recipe.description) {
-                speechContent += `Description: ${recipe.description}. `;
-            }
-            
-            speechContent += `Preparation time: ${recipe.prepTime} minutes. Cook time: ${recipe.cookTime} minutes. Total time: ${recipe.totalTime} minutes. Servings: ${recipe.servings}. `;
-            
-            // Ingredients
-            speechContent += 'Ingredients: ';
-            recipe.ingredients.forEach((ingredient, index) => {
-                speechContent += `${index + 1}. ${ingredient}. `;
-            });
-            
-            // Instructions
-            speechContent += 'Instructions: ';
-            recipe.instructions.forEach((instruction, index) => {
-                speechContent += `Step ${index + 1}. ${instruction}. `;
-            });
-
-            // Configure speech options
-            const speechOptions = {
-                language: 'en',
-                pitch: 1.0,
-                rate: 0.8, // Slightly slower for better comprehension
-                onStart: () => setIsSpeaking(true),
-                onDone: () => {
-                    setIsSpeaking(false);
-                    setCurrentStep(0);
-                },
-                onStopped: () => {
-                    setIsSpeaking(false);
-                    setCurrentStep(0);
-                },
-                onError: (error) => {
-                    console.error('Speech error:', error);
-                    setIsSpeaking(false);
-                    setCurrentStep(0);
-                    Alert.alert('Speech Error', 'Failed to read recipe: ' + error);
-                }
-            };
-
-            await Speech.speak(speechContent, speechOptions);
-
-        } catch (error) {
-            console.error('Speech error:', error);
-            setIsSpeaking(false);
-            setCurrentStep(0);
-            Alert.alert('Error', 'Text-to-speech not available: ' + error.message);
-        }
+            ]
+        );
     };
 
-    const speakInstructionsOnly = async () => {
-        try {
-            if (isSpeaking) {
-                Speech.stop();
-                setIsSpeaking(false);
-                setCurrentStep(0);
-                return;
-            }
-
-            setIsSpeaking(true);
-            setCurrentStep(1);
-
-            let instructionContent = 'Instructions for ' + recipe.title + '. ';
-            recipe.instructions.forEach((instruction, index) => {
-                instructionContent += `Step ${index + 1}. ${instruction}. `;
-            });
-
-            const speechOptions = {
-                language: 'en',
-                pitch: 1.0,
-                rate: 0.8,
-                onStart: () => setIsSpeaking(true),
-                onDone: () => {
-                    setIsSpeaking(false);
-                    setCurrentStep(0);
-                },
-                onStopped: () => {
-                    setIsSpeaking(false);
-                    setCurrentStep(0);
-                },
-                onError: (error) => {
-                    console.error('Speech error:', error);
-                    setIsSpeaking(false);
-                    setCurrentStep(0);
-                }
-            };
-
-            await Speech.speak(instructionContent, speechOptions);
-
-        } catch (error) {
-            console.error('Speech error:', error);
-            setIsSpeaking(false);
-            setCurrentStep(0);
-            Alert.alert('Error', 'Failed to read instructions: ' + error.message);
+    // Highlight text function
+    const HighlightedText = ({ text, highlight }) => {
+        if (!highlight || !text.includes(highlight)) {
+            return <Text style={styles.normalText}>{text}</Text>;
         }
-    };
 
-    const stopSpeaking = () => {
-        Speech.stop();
-        setIsSpeaking(false);
-        setCurrentStep(0);
+        const parts = text.split(new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+        
+        return (
+            <Text style={styles.normalText}>
+                {parts.map((part, index) => 
+                    part.toLowerCase() === highlight.toLowerCase() ? (
+                        <Text key={index} style={styles.highlightedText}>
+                            {part}
+                        </Text>
+                    ) : (
+                        <Text key={index}>{part}</Text>
+                    )
+                )}
+            </Text>
+        );
     };
 
     return (
@@ -236,12 +198,13 @@ Shared from Recipe Book App 🍳
                             <TouchableOpacity 
                                 style={[
                                     styles.voiceButton,
-                                    isSpeaking && styles.voiceButtonActive
+                                    isSpeaking && styles.voiceButtonActive,
+                                    isPaused && styles.voiceButtonPaused
                                 ]}
                                 onPress={speakRecipe}
                             >
                                 <Text style={styles.voiceButtonText}>
-                                    {isSpeaking && currentStep === 0 ? '🔊' : '🔈'}
+                                    {isPaused ? '⏸️' : (isSpeaking ? '🔊' : '🔈')}
                                 </Text>
                             </TouchableOpacity>
                             
@@ -269,7 +232,10 @@ Shared from Recipe Book App 🍳
                     </View>
                     
                     {recipe.description && (
-                        <Text style={styles.description}>{recipe.description}</Text>
+                        <HighlightedText 
+                            text={recipe.description} 
+                            highlight={highlightedSentence}
+                        />
                     )}
                     
                     <View style={styles.metaInfo}>
@@ -296,15 +262,25 @@ Shared from Recipe Book App 🍳
                         <TouchableOpacity 
                             style={[
                                 styles.voiceControlButton,
-                                isSpeaking && currentStep === 1 && styles.voiceControlButtonActive
+                                isSpeaking && styles.voiceControlButtonActive
                             ]}
                             onPress={speakInstructionsOnly}
-                            disabled={isSpeaking && currentStep !== 1}
                         >
                             <Text style={styles.voiceControlButtonText}>
-                                {isSpeaking && currentStep === 1 ? '🔊 Read Instructions' : '🔈 Read Instructions'}
+                                {isSpeaking ? '🔊 Instructions' : '🔈 Instructions'}
                             </Text>
                         </TouchableOpacity>
+                        
+                        {isSpeaking && (
+                            <TouchableOpacity 
+                                style={styles.pauseButton}
+                                onPress={handlePauseResume}
+                            >
+                                <Text style={styles.pauseButtonText}>
+                                    {isPaused ? '▶️ Resume' : '⏸️ Pause'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                         
                         {isSpeaking && (
                             <TouchableOpacity 
@@ -315,6 +291,14 @@ Shared from Recipe Book App 🍳
                             </TouchableOpacity>
                         )}
                     </View>
+
+                    {/* Current Speaking Indicator */}
+                    {highlightedSentence && (
+                        <View style={styles.highlightContainer}>
+                            <Text style={styles.highlightLabel}>Now Speaking:</Text>
+                            <Text style={styles.highlightedSentence}>{highlightedSentence}</Text>
+                        </View>
+                    )}
 
                     {recipe.userName && (
                         <View style={styles.authorContainer}>
@@ -355,10 +339,7 @@ Shared from Recipe Book App 🍳
                                 const ingredientsText = recipe.ingredients.map((ing, idx) => 
                                     `${idx + 1}. ${ing}`
                                 ).join('. ');
-                                Speech.speak(`Ingredients: ${ingredientsText}`, {
-                                    language: 'en',
-                                    rate: 0.8
-                                });
+                                TTSService.speakWithHighlight(ingredientsText, handleHighlight);
                             }}
                         >
                             <Text style={styles.sectionVoiceIcon}>🔈</Text>
@@ -367,7 +348,11 @@ Shared from Recipe Book App 🍳
                     {recipe.ingredients.map((ingredient, index) => (
                         <View key={index} style={styles.ingredientItem}>
                             <Text style={styles.ingredientBullet}>•</Text>
-                            <Text style={styles.ingredient}>{ingredient}</Text>
+                            <HighlightedText 
+                                text={ingredient} 
+                                highlight={highlightedSentence}
+                                style={styles.ingredient}
+                            />
                         </View>
                     ))}
                 </View>
@@ -382,7 +367,7 @@ Shared from Recipe Book App 🍳
                             onPress={speakInstructionsOnly}
                         >
                             <Text style={styles.sectionVoiceIcon}>
-                                {isSpeaking && currentStep === 1 ? '🔊' : '🔈'}
+                                {isSpeaking ? '🔊' : '🔈'}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -391,14 +376,20 @@ Shared from Recipe Book App 🍳
                             <View style={styles.stepNumberContainer}>
                                 <Text style={styles.stepNumber}>{index + 1}</Text>
                             </View>
-                            <Text style={styles.instructionText}>{instruction}</Text>
+                            <View style={styles.instructionTextContainer}>
+                                <HighlightedText 
+                                    text={instruction} 
+                                    highlight={highlightedSentence}
+                                    style={styles.instructionText}
+                                />
+                            </View>
                             <TouchableOpacity 
                                 style={styles.stepVoiceButton}
                                 onPress={() => {
-                                    Speech.speak(`Step ${index + 1}. ${instruction}`, {
-                                        language: 'en',
-                                        rate: 0.8
-                                    });
+                                    TTSService.speakWithHighlight(
+                                        `Step ${index + 1}. ${instruction}`,
+                                        handleHighlight
+                                    );
                                 }}
                             >
                                 <Text style={styles.stepVoiceIcon}>🔈</Text>
@@ -465,6 +456,9 @@ const styles = StyleSheet.create({
     voiceButtonActive: {
         backgroundColor: '#17a2b8',
     },
+    voiceButtonPaused: {
+        backgroundColor: '#FFA500',
+    },
     voiceButtonText: {
         fontSize: 18,
         color: '#FFFFFF',
@@ -503,6 +497,18 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '600',
         fontSize: 14,
+    },
+    normalText: {
+        fontSize: 16,
+        color: '#666666',
+        lineHeight: 24,
+    },
+    highlightedText: {
+        backgroundColor: '#FFD700',
+        color: '#2D2D2D',
+        fontWeight: '600',
+        paddingHorizontal: 4,
+        borderRadius: 4,
     },
     description: {
         fontSize: 16,
@@ -563,6 +569,19 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 14,
     },
+    pauseButton: {
+        backgroundColor: '#FFA500',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+        marginRight: 8,
+        alignItems: 'center',
+    },
+    pauseButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 14,
+    },
     stopButton: {
         backgroundColor: '#FF3B30',
         paddingVertical: 12,
@@ -574,6 +593,26 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '600',
         fontSize: 14,
+    },
+    highlightContainer: {
+        backgroundColor: '#FFF0EB',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF6B35',
+    },
+    highlightLabel: {
+        fontSize: 12,
+        color: '#FF6B35',
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    highlightedSentence: {
+        fontSize: 14,
+        color: '#2D2D2D',
+        fontWeight: '500',
+        fontStyle: 'italic',
     },
     authorContainer: {
         marginBottom: 16,
@@ -686,11 +725,13 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#FFFFFF',
     },
+    instructionTextContainer: {
+        flex: 1,
+    },
     instructionText: {
         fontSize: 16,
         color: '#2D2D2D',
         lineHeight: 24,
-        flex: 1,
     },
     stepVoiceButton: {
         padding: 8,

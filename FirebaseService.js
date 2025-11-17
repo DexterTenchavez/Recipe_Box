@@ -1,4 +1,3 @@
-// FirebaseService.js
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -19,7 +18,8 @@ import {
   where,
   orderBy,
   getDocs,
-  deleteDoc 
+  deleteDoc,
+  limit
 } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 
@@ -392,9 +392,9 @@ class FirebaseServiceClass {
         }
         throw new Error(`Failed to delete recipe: ${error.message}`);
     }
-}
+  }
 
-async deletePinnedRecipeFromAllUsers(recipeId) {
+  async deletePinnedRecipeFromAllUsers(recipeId) {
     try {
         console.log('Cleaning up pinned recipes for:', recipeId);
         
@@ -422,7 +422,7 @@ async deletePinnedRecipeFromAllUsers(recipeId) {
         console.error('Error deleting pinned recipes:', error);
         // Don't throw error here - we don't want to fail the main delete if pinned delete fails
     }
-}
+  }
 
   // ---------- Pinned Recipes Management ----------
   async pinRecipe(recipe) {
@@ -583,6 +583,220 @@ async deletePinnedRecipeFromAllUsers(recipeId) {
     } catch (error) {
       console.error('Error checking if recipe is pinned:', error);
       return false;
+    }
+  }
+
+  // ---------- User Search for Sharing ----------
+  async searchUsers(query) {
+    try {
+        console.log('Searching users:', query);
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        if (!query || query.length < 2) {
+            return [];
+        }
+
+        const usersCollection = collection(db, 'users');
+        const q = query(
+            usersCollection,
+            where('name', '>=', query),
+            where('name', '<=', query + '\uf8ff'),
+            orderBy('name'),
+            limit(10)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const users = [];
+
+        querySnapshot.forEach((doc) => {
+            const userData = doc.data();
+            // Don't include current user in search results
+            if (doc.id !== user.uid) {
+                users.push({
+                    uid: doc.id,
+                    ...userData
+                });
+            }
+        });
+
+        console.log(`Found ${users.length} users`);
+        return users;
+    } catch (error) {
+        console.error('Error searching users:', error);
+        // If index doesn't exist, return empty array
+        if (error.code === 'failed-precondition') {
+            console.log('Index required for user search');
+            return [];
+        }
+        throw new Error(`Failed to search users: ${error.message}`);
+    }
+  }
+
+  // ---------- Share Recipe with Specific User ----------
+  async shareRecipeWithUser(recipeId, targetUserId, message = '') {
+    try {
+        console.log('Sharing recipe with user:', { recipeId, targetUserId });
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        // Verify recipe exists and user owns it
+        const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
+        if (!recipeDoc.exists()) {
+            throw new Error('Recipe not found');
+        }
+
+        const recipeData = recipeDoc.data();
+        if (recipeData.userId !== user.uid) {
+            throw new Error('You can only share your own recipes');
+        }
+
+        // Verify target user exists
+        const targetUserDoc = await getDoc(doc(db, 'users', targetUserId));
+        if (!targetUserDoc.exists()) {
+            throw new Error('Target user not found');
+        }
+
+        // Create shared recipe document
+        const sharedRecipeData = {
+            originalRecipeId: recipeId,
+            sharedBy: user.uid,
+            sharedByUserName: user.displayName || 'Anonymous',
+            sharedWith: targetUserId,
+            sharedWithUserName: targetUserDoc.data().name,
+            message: message,
+            sharedAt: serverTimestamp(),
+            recipeData: {
+                title: recipeData.title,
+                description: recipeData.description,
+                ingredients: recipeData.ingredients,
+                instructions: recipeData.instructions,
+                prepTime: recipeData.prepTime,
+                cookTime: recipeData.cookTime,
+                totalTime: recipeData.totalTime,
+                servings: recipeData.servings,
+                tags: recipeData.tags || []
+            }
+        };
+
+        // Add to shared recipes collection
+        const sharedCollection = collection(db, 'sharedRecipes');
+        await addDoc(sharedCollection, sharedRecipeData);
+
+        console.log('Recipe shared successfully with user');
+        return true;
+    } catch (error) {
+        console.error('Error sharing recipe with user:', error);
+        throw new Error(`Failed to share recipe: ${error.message}`);
+    }
+  }
+
+  // ---------- Get Recipes Shared with Current User ----------
+  async getSharedRecipes() {
+    try {
+        console.log('Fetching shared recipes...');
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        const sharedCollection = collection(db, 'sharedRecipes');
+        const q = query(
+            sharedCollection,
+            where('sharedWith', '==', user.uid),
+            orderBy('sharedAt', 'desc')
+        );
+
+        const querySnapshot = await getDocs(q);
+        const sharedRecipes = [];
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            sharedRecipes.push({
+                id: doc.id,
+                ...data,
+                sharedAt: data.sharedAt?.toDate?.() || new Date()
+            });
+        });
+
+        console.log(`Found ${sharedRecipes.length} shared recipes`);
+        return sharedRecipes;
+    } catch (error) {
+        console.error('Error getting shared recipes:', error);
+        return [];
+    }
+  }
+
+  // ---------- Remove Shared Recipe ----------
+  async removeSharedRecipe(sharedRecipeId) {
+    try {
+        console.log('Removing shared recipe:', sharedRecipeId);
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        // Verify the shared recipe exists and belongs to current user
+        const sharedDoc = await getDoc(doc(db, 'sharedRecipes', sharedRecipeId));
+        if (!sharedDoc.exists()) {
+            throw new Error('Shared recipe not found');
+        }
+
+        const sharedData = sharedDoc.data();
+        if (sharedData.sharedWith !== user.uid) {
+            throw new Error('You can only remove recipes shared with you');
+        }
+
+        await deleteDoc(doc(db, 'sharedRecipes', sharedRecipeId));
+        console.log('Shared recipe removed successfully');
+        return true;
+    } catch (error) {
+        console.error('Error removing shared recipe:', error);
+        throw new Error(`Failed to remove shared recipe: ${error.message}`);
+    }
+  }
+
+  // ---------- Image Upload ----------
+  async uploadRecipeImage(recipeId, imageUri) {
+    try {
+        console.log('Uploading recipe image:', recipeId);
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        // For React Native, you would use a storage solution like Firebase Storage
+        // This is a simplified version - you'll need to implement actual image upload
+        // based on your storage solution
+
+        const imageData = {
+            recipeId: recipeId,
+            uploadedBy: user.uid,
+            uploadedAt: serverTimestamp(),
+            imageUri: imageUri, // This would be the download URL after upload
+            // Add other image metadata as needed
+        };
+
+        // Store image reference in Firestore
+        const imagesCollection = collection(db, 'recipeImages');
+        const docRef = await addDoc(imagesCollection, imageData);
+
+        // Update recipe with image reference
+        await setDoc(doc(db, 'recipes', recipeId), {
+            imageId: docRef.id,
+            imageUrl: imageUri,
+            updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        console.log('Recipe image uploaded successfully');
+        return docRef.id;
+    } catch (error) {
+        console.error('Error uploading recipe image:', error);
+        throw new Error(`Failed to upload image: ${error.message}`);
     }
   }
 
