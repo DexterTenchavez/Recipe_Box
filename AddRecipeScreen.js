@@ -78,6 +78,14 @@ export default function AddRecipeScreen({ navigation }) {
 
     const pickImage = async () => {
         try {
+            console.log('Starting image picker...');
+            
+            // Check if ImagePicker is available
+            if (!ImagePicker || !ImagePicker.requestMediaLibraryPermissionsAsync) {
+                Alert.alert('Error', 'Image picker is not available. Please make sure expo-image-picker is installed correctly.');
+                return;
+            }
+
             // Request permissions
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
@@ -85,6 +93,7 @@ export default function AddRecipeScreen({ navigation }) {
                 return;
             }
 
+            console.log('Launching image library...');
             let result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
@@ -92,35 +101,50 @@ export default function AddRecipeScreen({ navigation }) {
                 quality: 0.8,
             });
 
+            console.log('Image picker result:', result);
+
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 setImage(result.assets[0].uri);
+                console.log('Image selected:', result.assets[0].uri);
             }
         } catch (error) {
             console.error('Image picker error:', error);
-            Alert.alert('Error', 'Failed to pick image: ' + error.message);
+            Alert.alert('Error', 'Failed to pick image. Please try again.');
         }
     };
 
     const takePhoto = async () => {
         try {
+            console.log('Starting camera...');
+            
+            // Check if ImagePicker is available
+            if (!ImagePicker || !ImagePicker.requestCameraPermissionsAsync) {
+                Alert.alert('Error', 'Camera is not available. Please make sure expo-image-picker is installed correctly.');
+                return;
+            }
+
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('Permission required', 'Sorry, we need camera permissions to take a photo of your dish!');
                 return;
             }
 
+            console.log('Launching camera...');
             let result = await ImagePicker.launchCameraAsync({
                 allowsEditing: true,
                 aspect: [4, 3],
                 quality: 0.8,
             });
 
+            console.log('Camera result:', result);
+
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 setImage(result.assets[0].uri);
+                console.log('Photo taken:', result.assets[0].uri);
             }
         } catch (error) {
             console.error('Camera error:', error);
-            Alert.alert('Error', 'Failed to take photo: ' + error.message);
+            Alert.alert('Error', 'Failed to take photo. Please try again.');
         }
     };
 
@@ -159,7 +183,7 @@ export default function AddRecipeScreen({ navigation }) {
                 instructions: filteredInstructions,
                 tags: tags,
                 totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
-                hasImage: !!image // Flag to indicate if recipe has an image
+                hasImage: !!image
             };
 
             // First, save the recipe
