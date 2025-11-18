@@ -105,6 +105,42 @@ class FirebaseServiceClass {
     }
   }
 
+  async fixIsSharedDataTypes() {
+  try {
+    console.log('Fixing isShared data types...');
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const recipesCollection = collection(db, 'recipes');
+    const querySnapshot = await getDocs(recipesCollection);
+    
+    let fixedCount = 0;
+    const updates = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Check if isShared exists and is a string
+      if (data.isShared !== undefined && typeof data.isShared === 'string') {
+        updates.push(
+          setDoc(doc.ref, {
+            isShared: data.isShared === 'true' || data.isShared === true
+          }, { merge: true })
+        );
+        fixedCount++;
+      }
+    });
+    
+    await Promise.all(updates);
+    console.log(`Fixed ${fixedCount} recipes with string isShared values`);
+    return { success: true, count: fixedCount };
+  } catch (error) {
+    console.error('Error fixing data:', error);
+    throw error;
+  }
+}
+
  async addRecipe(recipeData) {
   try {
     console.log('Starting to add recipe...');

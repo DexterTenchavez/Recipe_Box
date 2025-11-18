@@ -81,6 +81,31 @@ export default function HomeScreen({ navigation }) {
         }, [])
     );
 
+    const handleFixData = async () => {
+        Alert.alert(
+            'Fix Data Types',
+            'This will fix any recipes with incorrect data types. Run this once if you\'re experiencing errors.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Fix Now',
+                    onPress: async () => {
+                        try {
+                            setLoading(true);
+                            const result = await FirebaseService.fixIsSharedDataTypes();
+                            Alert.alert('Success', `Fixed ${result.count} recipes!`);
+                            loadAllData(); // Refresh data
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to fix data: ' + error.message);
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleLogout = async () => {
         Alert.alert(
             'Logout',
@@ -408,10 +433,16 @@ Shared from Recipe Book App 🍳
                 </View>
                 <View style={styles.headerButtons}>
                     <TouchableOpacity 
+                        style={styles.fixDataButton}
+                        onPress={handleFixData}
+                    >
+                        <Text style={styles.fixDataButtonText}>🔧</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
                         style={styles.publicRecipesButton}
                         onPress={() => navigation.navigate('PublicRecipes')}
                     >
-                        <Text style={styles.publicRecipesButtonText}>Browse Recipes</Text>
+                        <Text style={styles.publicRecipesButtonText}>Browse</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                         <Text style={styles.logoutButtonText}>Logout</Text>
@@ -522,6 +553,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
+    },
+    fixDataButton: {
+        backgroundColor: '#FFA500',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+    },
+    fixDataButtonText: {
+        fontSize: 16,
     },
     publicRecipesButton: {
         backgroundColor: '#FF6B35',
