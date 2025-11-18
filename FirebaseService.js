@@ -667,6 +667,150 @@ class FirebaseServiceClass {
     }
   }
 
+
+  // Add to FirebaseService.js
+static async getAllUsers() {
+    try {
+        const usersSnapshot = await db.collection('users').get();
+        return usersSnapshot.docs.map(doc => ({
+            uid: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        throw new Error('Failed to load users: ' + error.message);
+    }
+}
+
+static async shareRecipeWithUser(recipeId, userEmail, message = '') {
+    try {
+        // Get the recipe
+        const recipeDoc = await db.collection('recipes').doc(recipeId).get();
+        if (!recipeDoc.exists) {
+            throw new Error('Recipe not found');
+        }
+
+        const recipe = { id: recipeDoc.id, ...recipeDoc.data() };
+        
+        // Find the user by email
+        const usersSnapshot = await db.collection('users')
+            .where('email', '==', userEmail.toLowerCase())
+            .get();
+            
+        if (usersSnapshot.empty) {
+            throw new Error('User not found with this email');
+        }
+
+        const targetUser = usersSnapshot.docs[0];
+        
+        // Add to shared recipes collection
+        await db.collection('sharedRecipes').add({
+            recipeId: recipeId,
+            recipeData: recipe,
+            sharedBy: auth.currentUser.uid,
+            sharedByUserName: auth.currentUser.displayName || 'Anonymous',
+            sharedWith: targetUser.id,
+            sharedWithEmail: userEmail.toLowerCase(),
+            message: message,
+            sharedAt: new Date(),
+            createdAt: new Date()
+        });
+
+        return { success: true };
+    } catch (error) {
+        throw new Error('Failed to share recipe: ' + error.message);
+    }
+}
+
+// Add these functions to your FirebaseService class
+
+// Get shared recipes
+async getSharedRecipes() {
+    try {
+        console.log('Fetching shared recipes...');
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        const sharedCollection = collection(db, 'sharedRecipes');
+        const q = query(
+            sharedCollection,
+            where('sharedWith', '==', user.uid),
+            orderBy('sharedAt', 'desc')
+        );
+
+        const querySnapshot = await getDocs(q);
+        const sharedRecipes = [];
+
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            sharedRecipes.push({
+                id: doc.id,
+                ...data,
+                recipeData: data.recipeData || {},
+                sharedByUserName: data.sharedByUserName || 'Anonymous',
+                sharedAt: data.sharedAt?.toDate?.() || new Date()
+            });
+        });
+
+        console.log(`Found ${sharedRecipes.length} shared recipes`);
+        return sharedRecipes;
+    } catch (error) {
+        console.error('Error getting shared recipes:', error);
+        if (error.code === 'permission-denied' || error.code === 'not-found') {
+            return [];
+        }
+        throw new Error(`Failed to load shared recipes: ${error.message}`);
+    }
+}
+
+// Get all users
+async getAllUsers() {
+    try {
+        console.log('Fetching all users...');
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const users = usersSnapshot.docs.map(doc => ({
+            uid: doc.id,
+            ...doc.data()
+        }));
+        
+        console.log(`Found ${users.length} users`);
+        return users;
+    } catch (error) {
+        console.error('Error getting users:', error);
+        throw new Error('Failed to load users: ' + error.message);
+    }
+}
+
+// Remove shared recipe
+async removeSharedRecipe(sharedRecipeId) {
+    try {
+        console.log('Removing shared recipe:', sharedRecipeId);
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+
+        // Verify the shared recipe belongs to current user
+        const sharedDoc = await getDoc(doc(db, 'sharedRecipes', sharedRecipeId));
+        if (!sharedDoc.exists()) {
+            throw new Error('Shared recipe not found');
+        }
+
+        const sharedData = sharedDoc.data();
+        if (sharedData.sharedWith !== user.uid) {
+            throw new Error('You can only remove recipes shared with you');
+        }
+
+        await deleteDoc(doc(db, 'sharedRecipes', sharedRecipeId));
+        console.log('Shared recipe removed successfully');
+        return true;
+    } catch (error) {
+        console.error('Error removing shared recipe:', error);
+        throw new Error(`Failed to remove shared recipe: ${error.message}`);
+    }
+}
+
   // ---------- Logout ----------
   async logoutUser() {
     try {

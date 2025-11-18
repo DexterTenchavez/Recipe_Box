@@ -4,12 +4,13 @@ import {
     Text, 
     StyleSheet, 
     TouchableOpacity, 
-    FlatList, 
     Alert,
     Share,
     ActivityIndicator,
     TextInput,
-    ScrollView
+    ScrollView,
+    Modal,
+    RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -21,9 +22,18 @@ export default function HomeScreen({ navigation }) {
     const [pinnedRecipes, setPinnedRecipes] = useState([]);
     const [sharedRecipes, setSharedRecipes] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [user, setUser] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('myRecipes'); // 'myRecipes', 'pinned', 'shared'
+    const [activeTab, setActiveTab] = useState('myRecipes');
+    
+    // New states for user sharing
+    const [showUserShareModal, setShowUserShareModal] = useState(false);
+    const [selectedRecipe, setSelectedRecipe] = useState(null);
+    const [shareEmail, setShareEmail] = useState('');
+    const [shareMessage, setShareMessage] = useState('');
+    const [allUsers, setAllUsers] = useState([]);
+    const [searchUserQuery, setSearchUserQuery] = useState('');
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -38,16 +48,39 @@ export default function HomeScreen({ navigation }) {
     }, []);
 
     const loadAllData = async () => {
-        await Promise.all([
-            loadRecipes(),
-            loadPinnedRecipes(),
-            loadSharedRecipes()
-        ]);
+        try {
+            setLoading(true);
+            await Promise.all([
+                loadRecipes(),
+                loadPinnedRecipes(),
+                loadSharedRecipes(),
+                loadAllUsers()
+            ]);
+        } catch (error) {
+            console.log('Error loading data:', error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const loadAllUsers = async () => {
+        try {
+            const users = await FirebaseService.getAllUsers();
+            setAllUsers(users.filter(u => u.uid !== user?.uid));
+        } catch (error) {
+            console.log('Error loading users:', error.message);
+        }
+    };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadAllData();
     };
 
     const handleQuickShare = async (recipe) => {
-    try {
-        const shareContent = `
+        try {
+            const shareContent = `
 🍽️ ${recipe.title}
 
 ${recipe.description ? `${recipe.description}\n` : ''}
@@ -64,30 +97,77 @@ ${recipe.instructions.map((instruction, index) => `${index + 1}. ${instruction}`
 ${recipe.tags && recipe.tags.length > 0 ? `\n🏷️ Tags: ${recipe.tags.join(', ')}` : ''}
 
 Shared from Recipe Book App 🍳
-        `.trim();
+            `.trim();
 
-        const result = await Share.share({
-            message: shareContent,
-            title: `Share Recipe: ${recipe.title}`
-        });
-
-        if (result.action === Share.sharedAction) {
-            console.log('Recipe shared successfully');
+            await Share.share({
+                message: shareContent,
+                title: `Share Recipe: ${recipe.title}`
+            });
+        } catch (error) {
+            Alert.alert('Error', 'Failed to share recipe');
         }
-    } catch (error) {
-        Alert.alert('Error', 'Failed to share recipe: ' + error.message);
-    }
-};
+    };
+
+    const handleUserShare = (recipe) => {
+        setSelectedRecipe(recipe);
+        setShareEmail('');
+        setShareMessage(`Check out this recipe: ${recipe.title}`);
+        setShowUserShareModal(true);
+    };
+
+    const shareWithUser = async () => {
+        if (!shareEmail.trim()) {
+            Alert.alert('Error', 'Please enter a user email');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await FirebaseService.shareRecipeWithUser(
+                selectedRecipe.id, 
+                shareEmail.trim(),
+                shareMessage.trim() || `Check out this recipe: ${selectedRecipe.title}`
+            );
+            
+            Alert.alert('Success', `Recipe shared with ${shareEmail}`);
+            setShowUserShareModal(false);
+            setShareEmail('');
+            setShareMessage('');
+            
+        } catch (error) {
+            Alert.alert('Error', error.message || 'Failed to share recipe with user');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const shareWithSelectedUser = async (userEmail) => {
+        try {
+            setLoading(true);
+            await FirebaseService.shareRecipeWithUser(
+                selectedRecipe.id, 
+                userEmail,
+                shareMessage.trim() || `Check out this recipe: ${selectedRecipe.title}`
+            );
+            
+            Alert.alert('Success', `Recipe shared with ${userEmail}`);
+            setShowUserShareModal(false);
+            setShareEmail('');
+            setShareMessage('');
+            
+        } catch (error) {
+            Alert.alert('Error', error.message || 'Failed to share recipe with user');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadRecipes = async () => {
         try {
-            setLoading(true);
             const userRecipes = await FirebaseService.getUserRecipes();
             setRecipes(userRecipes);
         } catch (error) {
-            Alert.alert('Error', 'Failed to load recipes: ' + error.message);
-        } finally {
-            setLoading(false);
+            console.log('Error loading recipes:', error.message);
         }
     };
 
@@ -109,12 +189,6 @@ Shared from Recipe Book App 🍳
         }
     };
 
-    useFocusEffect(
-        React.useCallback(() => {
-            loadAllData();
-        }, [])
-    );
-
     const handleFixData = async () => {
         Alert.alert(
             'Fix Data Types',
@@ -128,7 +202,7 @@ Shared from Recipe Book App 🍳
                             setLoading(true);
                             const result = await FirebaseService.fixIsSharedDataTypes();
                             Alert.alert('Success', `Fixed ${result.count} recipes!`);
-                            loadAllData(); // Refresh data
+                            loadAllData();
                         } catch (error) {
                             Alert.alert('Error', 'Failed to fix data: ' + error.message);
                         } finally {
@@ -176,8 +250,6 @@ Shared from Recipe Book App 🍳
         }
     };
 
-   
-
     const handleUnpinRecipe = async (pinnedRecipeId) => {
         try {
             await FirebaseService.unpinRecipe(pinnedRecipeId);
@@ -185,8 +257,6 @@ Shared from Recipe Book App 🍳
             Alert.alert('Success', 'Recipe unpinned!');
         } catch (error) {
             if (error.message.includes('Pinned recipe not found')) {
-                // Recipe was already deleted, just refresh the list
-                console.log('Recipe already removed, refreshing list...');
                 loadPinnedRecipes();
             } else {
                 Alert.alert('Error', 'Failed to unpin recipe: ' + error.message);
@@ -203,6 +273,12 @@ Shared from Recipe Book App 🍳
             Alert.alert('Error', 'Failed to remove shared recipe: ' + error.message);
         }
     };
+
+    useFocusEffect(
+        React.useCallback(() => {
+            loadAllData();
+        }, [])
+    );
 
     // Filter recipes based on search query and active tab
     const getFilteredRecipes = () => {
@@ -226,6 +302,8 @@ Shared from Recipe Book App 🍳
                 break;
         }
 
+        if (!searchQuery.trim()) return recipesToFilter;
+
         return recipesToFilter.filter(recipe =>
             recipe.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             recipe.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -234,6 +312,38 @@ Shared from Recipe Book App 🍳
             )) ||
             (recipe.sharedBy && recipe.sharedBy.toLowerCase().includes(searchQuery.toLowerCase()))
         );
+    };
+
+    // Filter users for the share modal
+    const filteredUsers = allUsers.filter(user =>
+        user.email.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+        user.name?.toLowerCase().includes(searchUserQuery.toLowerCase())
+    );
+
+    const getEmptyStateMessage = () => {
+        switch (activeTab) {
+            case 'myRecipes':
+                return 'No recipes yet!';
+            case 'pinned':
+                return 'No pinned recipes!';
+            case 'shared':
+                return 'No shared recipes!';
+            default:
+                return 'No recipes found';
+        }
+    };
+
+    const getEmptyStateSubtext = () => {
+        switch (activeTab) {
+            case 'myRecipes':
+                return 'Start building your recipe collection';
+            case 'pinned':
+                return 'Pin recipes from the community to see them here';
+            case 'shared':
+                return 'Recipes shared with you will appear here';
+            default:
+                return '';
+        }
     };
 
     const renderRecipeItem = ({ item, isPinned = false, isShared = false }) => (
@@ -263,12 +373,12 @@ Shared from Recipe Book App 🍳
                         </TouchableOpacity>
                     ) : (
                         <>
-                           {/*<TouchableOpacity 
+                            <TouchableOpacity 
                                 style={styles.userShareButton}
                                 onPress={() => handleUserShare(item)}
                             >
                                 <Text style={styles.userShareButtonText}>👤</Text>
-                            </TouchableOpacity> */} 
+                            </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.quickShareButton}
                                 onPress={() => handleQuickShare(item)}
@@ -292,9 +402,11 @@ Shared from Recipe Book App 🍳
                     )}
                 </View>
             </View>
+            
             <Text style={styles.recipeDescription} numberOfLines={2}>
                 {item.description || 'No description'}
             </Text>
+            
             <View style={styles.recipeMeta}>
                 <View style={styles.metaItem}>
                     <Text style={styles.metaIcon}>⏱️</Text>
@@ -320,6 +432,7 @@ Shared from Recipe Book App 🍳
                     </View>
                 )}
             </View>
+            
             {isPinned && (
                 <Text style={styles.recipeAuthor}>
                     by {item.userName || 'Unknown'}
@@ -342,7 +455,7 @@ Shared from Recipe Book App 🍳
     const renderTabContent = () => {
         const filteredRecipes = getFilteredRecipes();
 
-        if (loading) {
+        if (loading && !refreshing) {
             return (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" color="#FF6B35" />
@@ -381,6 +494,14 @@ Shared from Recipe Book App 🍳
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={['#FF6B35']}
+                        tintColor="#FF6B35"
+                    />
+                }
             >
                 {filteredRecipes.map((item) => (
                     <View key={item.id}>
@@ -393,32 +514,6 @@ Shared from Recipe Book App 🍳
                 ))}
             </ScrollView>
         );
-    };
-
-    const getEmptyStateMessage = () => {
-        switch (activeTab) {
-            case 'myRecipes':
-                return 'No recipes yet!';
-            case 'pinned':
-                return 'No pinned recipes!';
-            case 'shared':
-                return 'No shared recipes!';
-            default:
-                return 'No recipes found';
-        }
-    };
-
-    const getEmptyStateSubtext = () => {
-        switch (activeTab) {
-            case 'myRecipes':
-                return 'Start building your recipe collection';
-            case 'pinned':
-                return 'Pin recipes from the community to see them here';
-            case 'shared':
-                return 'Recipes shared with you will appear here';
-            default:
-                return '';
-        }
     };
 
     return (
@@ -495,22 +590,99 @@ Shared from Recipe Book App 🍳
                 </TouchableOpacity>
             </View>
 
-            {/* Add Recipe Button for My Recipes tab */}
-            {activeTab === 'myRecipes' && (
-                <View style={styles.addRecipeSection}>
-                    <TouchableOpacity 
-                        style={styles.addButtonLarge}
-                        onPress={() => navigation.navigate('AddRecipe')}
-                    >
-                        <Text style={styles.addButtonLargeText}>+ Add New Recipe</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
             {/* Content */}
             <View style={styles.content}>
                 {renderTabContent()}
             </View>
+
+            {/* Add Recipe FAB */}
+            {activeTab === 'myRecipes' && (
+                <TouchableOpacity 
+                    style={styles.fab}
+                    onPress={() => navigation.navigate('AddRecipe')}
+                >
+                    <Text style={styles.fabText}>+</Text>
+                </TouchableOpacity>
+            )}
+
+            {/* User Share Modal */}
+            <Modal
+                visible={showUserShareModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowUserShareModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Share Recipe</Text>
+                        <Text style={styles.recipeName}>{selectedRecipe?.title}</Text>
+                        
+                        <Text style={styles.modalLabel}>Share with user:</Text>
+                        
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search users..."
+                            value={searchUserQuery}
+                            onChangeText={setSearchUserQuery}
+                            placeholderTextColor="#999"
+                        />
+                        
+                        <ScrollView style={styles.userList} showsVerticalScrollIndicator={false}>
+                            {filteredUsers.map((user) => (
+                                <TouchableOpacity
+                                    key={user.uid}
+                                    style={styles.userItem}
+                                    onPress={() => shareWithSelectedUser(user.email)}
+                                >
+                                    <View style={styles.userInfo}>
+                                        <Text style={styles.userName}>{user.name}</Text>
+                                        <Text style={styles.userEmail}>{user.email}</Text>
+                                    </View>
+                                    <Text style={styles.shareArrow}>→</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+
+                        <Text style={styles.modalLabel}>Or enter email manually:</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Enter user email"
+                            value={shareEmail}
+                            onChangeText={setShareEmail}
+                            placeholderTextColor="#999"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+                        
+                        <TextInput
+                            style={[styles.textInput, styles.messageInput]}
+                            placeholder="Add a message (optional)"
+                            value={shareMessage}
+                            onChangeText={setShareMessage}
+                            placeholderTextColor="#999"
+                            multiline
+                        />
+                        
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity 
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setShowUserShareModal(false)}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.modalButton, styles.shareButton]}
+                                onPress={shareWithUser}
+                                disabled={loading}
+                            >
+                                <Text style={styles.shareButtonText}>
+                                    {loading ? 'Sharing...' : 'Share'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -518,7 +690,7 @@ Shared from Recipe Book App 🍳
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFF8F5',
+        backgroundColor: '#f8f9fa',
     },
     header: {
         flexDirection: 'row',
@@ -527,7 +699,7 @@ const styles = StyleSheet.create({
         padding: 20,
         backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#FFE5D9',
+        borderBottomColor: '#e9ecef',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
@@ -539,7 +711,7 @@ const styles = StyleSheet.create({
     },
     welcomeText: {
         fontSize: 14,
-        color: '#666666',
+        color: '#6c757d',
         marginBottom: 4,
     },
     userName: {
@@ -553,13 +725,14 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     fixDataButton: {
-        backgroundColor: '#FFA500',
+        backgroundColor: '#fd7e14',
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: 12,
     },
     fixDataButtonText: {
         fontSize: 16,
+        color: '#FFFFFF',
     },
     publicRecipesButton: {
         backgroundColor: '#FF6B35',
@@ -573,7 +746,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
     },
     logoutButton: {
-        backgroundColor: '#FF3B30',
+        backgroundColor: '#dc3545',
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 12,
@@ -589,18 +762,18 @@ const styles = StyleSheet.create({
         padding: 16,
         backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#FFE5D9',
+        borderBottomColor: '#e9ecef',
     },
     searchInput: {
         flex: 1,
-        backgroundColor: '#FFF8F5',
+        backgroundColor: '#f8f9fa',
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderRadius: 12,
         fontSize: 16,
         color: '#2D2D2D',
         borderWidth: 1,
-        borderColor: '#FFE5D9',
+        borderColor: '#e9ecef',
     },
     clearSearchButton: {
         padding: 8,
@@ -608,14 +781,14 @@ const styles = StyleSheet.create({
     },
     clearSearchText: {
         fontSize: 18,
-        color: '#666666',
+        color: '#6c757d',
         fontWeight: 'bold',
     },
     tabContainer: {
         flexDirection: 'row',
         backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderBottomColor: '#FFE5D9',
+        borderBottomColor: '#e9ecef',
     },
     tab: {
         flex: 1,
@@ -630,32 +803,10 @@ const styles = StyleSheet.create({
     tabText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#666666',
+        color: '#6c757d',
     },
     activeTabText: {
         color: '#FF6B35',
-    },
-    addRecipeSection: {
-        padding: 16,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#FFE5D9',
-    },
-    addButtonLarge: {
-        backgroundColor: '#FF6B35',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    addButtonLargeText: {
-        color: '#FFFFFF',
-        fontWeight: '600',
-        fontSize: 16,
     },
     content: {
         flex: 1,
@@ -664,8 +815,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     scrollContent: {
-        padding: 20,
-        paddingBottom: 40,
+        padding: 16,
     },
     centerContent: {
         flex: 1,
@@ -711,11 +861,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#28a745',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
     },
     userShareButtonText: {
         color: '#FFFFFF',
@@ -729,11 +874,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#17a2b8',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
     },
     quickShareButtonText: {
         color: '#FFFFFF',
@@ -745,14 +885,9 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 12,
         backgroundColor: '#FF6B35',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
     },
     sharedButton: {
-        backgroundColor: '#666666',
+        backgroundColor: '#6c757d',
     },
     shareButtonText: {
         color: '#FFFFFF',
@@ -763,14 +898,9 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#FFD700',
+        backgroundColor: '#ffc107',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
     },
     unpinButtonText: {
         fontSize: 16,
@@ -779,14 +909,9 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#FF3B30',
+        backgroundColor: '#dc3545',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
-        elevation: 2,
     },
     removeSharedButtonText: {
         fontSize: 16,
@@ -794,7 +919,7 @@ const styles = StyleSheet.create({
     },
     recipeDescription: {
         fontSize: 14,
-        color: '#666666',
+        color: '#6c757d',
         marginBottom: 16,
         lineHeight: 20,
     },
@@ -819,18 +944,18 @@ const styles = StyleSheet.create({
     },
     recipeServings: {
         fontSize: 12,
-        color: '#666666',
+        color: '#6c757d',
         fontWeight: '500',
     },
     pinnedBadge: {
-        backgroundColor: '#FFD700',
+        backgroundColor: '#ffc107',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
     },
     pinnedBadgeText: {
         fontSize: 10,
-        color: '#2D2D2D',
+        color: '#212529',
         fontWeight: '600',
     },
     sharedBadge: {
@@ -857,18 +982,18 @@ const styles = StyleSheet.create({
     },
     recipeAuthor: {
         fontSize: 12,
-        color: '#666666',
+        color: '#6c757d',
         fontStyle: 'italic',
         marginBottom: 4,
     },
     recipeDate: {
         fontSize: 12,
-        color: '#999999',
+        color: '#adb5bd',
         fontStyle: 'italic',
     },
     loadingText: {
         textAlign: 'center',
-        color: '#666666',
+        color: '#6c757d',
         fontSize: 16,
         marginTop: 12,
     },
@@ -891,7 +1016,7 @@ const styles = StyleSheet.create({
     },
     emptyStateSubtext: {
         fontSize: 14,
-        color: '#666666',
+        color: '#6c757d',
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 20,
@@ -906,5 +1031,144 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
+    },
+    fab: {
+        position: 'absolute',
+        right: 20,
+        bottom: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#FF6B35',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    fabText: {
+        color: '#FFFFFF',
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 24,
+        width: '100%',
+        maxHeight: '80%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 10,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#2D2D2D',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    recipeName: {
+        fontSize: 16,
+        color: '#FF6B35',
+        fontWeight: '600',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    modalLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#2D2D2D',
+        marginBottom: 8,
+        marginTop: 16,
+    },
+    textInput: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        color: '#2D2D2D',
+        marginBottom: 12,
+    },
+    messageInput: {
+        height: 80,
+        textAlignVertical: 'top',
+    },
+    userList: {
+        maxHeight: 150,
+        marginBottom: 16,
+    },
+    userItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 12,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    userInfo: {
+        flex: 1,
+    },
+    userName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#2D2D2D',
+        marginBottom: 2,
+    },
+    userEmail: {
+        fontSize: 12,
+        color: '#6c757d',
+    },
+    shareArrow: {
+        fontSize: 18,
+        color: '#FF6B35',
+        fontWeight: 'bold',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        gap: 12,
+    },
+    modalButton: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    cancelButtonText: {
+        color: '#6c757d',
+        fontWeight: '600',
+        fontSize: 16,
+    },
+    shareButton: {
+        backgroundColor: '#FF6B35',
+    },
+    shareButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 16,
     },
 });
