@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
     View, 
     Text, 
@@ -11,132 +11,187 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from './firebaseConfig';
 import { FirebaseService } from './FirebaseService';
-
-// Import TTS directly - it should work after proper installation
-import Tts from 'react-native-tts';
-
-// Simple working TTS service
-class WorkingTTSService {
-    constructor() {
-        this.isSpeaking = false;
-        this.isPaused = false;
-        this.ttsAvailable = false;
-        this.initTTS();
-    }
-
-    async initTTS() {
-        try {
-            // Initialize TTS with basic settings
-            await Tts.setDefaultLanguage('en-US');
-            await Tts.setDefaultRate(0.5);
-            this.ttsAvailable = true;
-            console.log('✅ TTS WORKING!');
-        } catch (error) {
-            console.log('TTS not available, using fallback');
-            this.ttsAvailable = false;
-        }
-    }
-
-    async speak(text) {
-        if (!this.ttsAvailable) {
-            // Fallback: show text in alert
-            Alert.alert('Recipe Reading', text.substring(0, 150) + '...');
-            return;
-        }
-
-        try {
-            this.isSpeaking = true;
-            await Tts.speak(text);
-        } catch (error) {
-            console.log('TTS speak error, using fallback');
-            Alert.alert('Recipe Reading', text.substring(0, 150) + '...');
-        }
-    }
-
-    async stop() {
-        try {
-            await Tts.stop();
-            this.isSpeaking = false;
-        } catch (error) {
-            console.log('TTS stop error');
-        }
-    }
-
-    getCurrentState() {
-        return {
-            isSpeaking: this.isSpeaking,
-            isPaused: this.isPaused,
-            ttsAvailable: this.ttsAvailable
-        };
-    }
-}
-
-const TTSService = new WorkingTTSService();
+import * as Speech from 'expo-speech';
 
 export default function RecipeDetailScreen({ route, navigation }) {
     const { recipe } = route.params;
     const currentUser = auth.currentUser;
+    
+    // State for speech
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [highlightedText, setHighlightedText] = useState('');
-    const [ttsAvailable, setTtsAvailable] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [currentSpeakingPart, setCurrentSpeakingPart] = useState('');
+    const [speechProgress, setSpeechProgress] = useState(0);
+    
+    // Refs for speech control
+    const speechQueue = useRef([]);
+    const currentIndex = useRef(0);
+    const isSpeakingRef = useRef(false);
 
-    useEffect(() => {
-        // Check TTS availability
-        const state = TTSService.getCurrentState();
-        setTtsAvailable(state.ttsAvailable);
-        
-        return () => {
-            TTSService.stop();
-        };
-    }, []);
+    // Split recipe into speakable parts
+    const recipeParts = [
+        { 
+            type: 'title', 
+            text: `Recipe: ${recipe.title}`,
+            section: 'header'
+        },
+        ...(recipe.description ? [{
+            type: 'description',
+            text: `Description: ${recipe.description}`,
+            section: 'header'
+        }] : []),
+        {
+            type: 'times',
+            text: `Preparation time: ${recipe.prepTime} minutes. Cook time: ${recipe.cookTime} minutes. Total time: ${recipe.totalTime} minutes. Servings: ${recipe.servings}`,
+            section: 'header'
+        },
+        {
+            type: 'ingredients',
+            text: `Ingredients: ${recipe.ingredients.join(', ')}`,
+            section: 'ingredients'
+        },
+        {
+            type: 'instructions', 
+            text: `Instructions: ${recipe.instructions.join('. ')}`,
+            section: 'instructions'
+        }
+    ];
 
-    // SPEAK FUNCTIONS WITH HIGHLIGHTING
+    // Speak functions
     const speakRecipe = async () => {
-        const sections = [
-            `Recipe: ${recipe.title}`,
-            recipe.description ? `Description: ${recipe.description}` : '',
-            `Preparation time: ${recipe.prepTime} minutes`,
-            `Cook time: ${recipe.cookTime} minutes`, 
-            `Total time: ${recipe.totalTime} minutes`,
-            `Servings: ${recipe.servings}`,
-            `Ingredients: ${recipe.ingredients.join(', ')}`,
-            `Instructions: ${recipe.instructions.join('. ')}`
-        ].filter(section => section);
-
-        for (const section of sections) {
-            setHighlightedText(section);
-            await TTSService.speak(section);
-            // Small delay between sections
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
             await new Promise(resolve => setTimeout(resolve, 500));
         }
-        setHighlightedText('');
+
+        speechQueue.current = [...recipeParts];
+        currentIndex.current = 0;
+        await speakNextPart();
     };
 
     const speakIngredients = async () => {
-        const ingredientsText = `Ingredients: ${recipe.ingredients.join(', ')}`;
-        setHighlightedText(ingredientsText);
-        await TTSService.speak(ingredientsText);
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        const ingredientsPart = recipeParts.find(part => part.type === 'ingredients');
+        if (ingredientsPart) {
+            speechQueue.current = [ingredientsPart];
+            currentIndex.current = 0;
+            await speakNextPart();
+        }
     };
 
     const speakInstructions = async () => {
-        const instructionsText = `Instructions: ${recipe.instructions.join('. ')}`;
-        setHighlightedText(instructionsText);
-        await TTSService.speak(instructionsText);
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        const instructionsPart = recipeParts.find(part => part.type === 'instructions');
+        if (instructionsPart) {
+            speechQueue.current = [instructionsPart];
+            currentIndex.current = 0;
+            await speakNextPart();
+        }
     };
 
-    const stopSpeaking = () => {
-        TTSService.stop();
-        setHighlightedText('');
+    const speakNextPart = async () => {
+        if (currentIndex.current >= speechQueue.current.length) {
+            // Finished speaking all parts
+            setIsSpeaking(false);
+            isSpeakingRef.current = false;
+            setCurrentSpeakingPart('');
+            setSpeechProgress(0);
+            return;
+        }
+
+        const currentPart = speechQueue.current[currentIndex.current];
+        setCurrentSpeakingPart(currentPart.type);
+        setSpeechProgress(((currentIndex.current + 1) / speechQueue.current.length) * 100);
+
+        try {
+            setIsSpeaking(true);
+            isSpeakingRef.current = true;
+            setIsPaused(false);
+
+            await Speech.speak(currentPart.text, {
+                language: 'en',
+                pitch: 1.0,
+                rate: 0.8,
+                onDone: () => {
+                    currentIndex.current++;
+                    speakNextPart();
+                },
+                onStopped: () => {
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                },
+                onError: (error) => {
+                    console.log('Speech error:', error);
+                    Alert.alert('Speech Error', 'Could not speak the text');
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                }
+            });
+        } catch (error) {
+            console.log('Speech error:', error);
+            Alert.alert('Speech Error', 'Could not speak the text');
+            setIsSpeaking(false);
+            isSpeakingRef.current = false;
+        }
     };
 
-    // Highlight text component
-    const HighlightedText = ({ text, highlight }) => {
-        if (!highlight) return <Text style={styles.normalText}>{text}</Text>;
+    const pauseSpeaking = async () => {
+        try {
+            await Speech.pause();
+            setIsPaused(true);
+        } catch (error) {
+            console.log('Pause error:', error);
+        }
+    };
+
+    const resumeSpeaking = async () => {
+        try {
+            await Speech.resume();
+            setIsPaused(false);
+        } catch (error) {
+            console.log('Resume error:', error);
+        }
+    };
+
+    const stopSpeaking = async () => {
+        try {
+            await Speech.stop();
+            setIsSpeaking(false);
+            isSpeakingRef.current = false;
+            setIsPaused(false);
+            setCurrentSpeakingPart('');
+            setSpeechProgress(0);
+            speechQueue.current = [];
+            currentIndex.current = 0;
+        } catch (error) {
+            console.log('Stop error:', error);
+        }
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            stopSpeaking();
+        };
+    }, []);
+
+    // Highlight components
+    const HighlightableText = ({ text, section, children }) => {
+        const isHighlighted = currentSpeakingPart === section;
         
         return (
-            <Text style={styles.normalText}>
-                <Text style={styles.highlightedText}>{text}</Text>
-            </Text>
+            <View style={isHighlighted ? styles.highlightedContainer : null}>
+                {children || <Text style={[styles.normalText, isHighlighted && styles.highlightedText]}>{text}</Text>}
+            </View>
         );
     };
 
@@ -197,73 +252,103 @@ Shared from Recipe Book App 🍳
                 {/* Header Section */}
                 <View style={styles.header}>
                     <View style={styles.headerTop}>
-                        <Text style={styles.title}>{recipe.title}</Text>
+                        <HighlightableText section="title">
+                            <Text style={styles.title}>{recipe.title}</Text>
+                        </HighlightableText>
+                        
                         <View style={styles.actionButtons}>
-                            {/* SPEAKER BUTTON */}
-                            <TouchableOpacity 
-                                style={[
-                                    styles.voiceButton,
-                                    !ttsAvailable && styles.voiceButtonDisabled
-                                ]}
-                                onPress={speakRecipe}
-                            >
-                                <Text style={styles.voiceButtonText}>
-                                    {ttsAvailable ? '🔊' : '🔇'}
-                                </Text>
-                            </TouchableOpacity>
-                            
-                            <TouchableOpacity 
-                                style={styles.shareButton}
-                                onPress={handleShareRecipe}
-                            >
-                                <Text style={styles.shareButtonText}>Share</Text>
-                            </TouchableOpacity>
-                            
-                            {currentUser?.uid === recipe.userId && (
-                                <TouchableOpacity 
-                                    style={styles.deleteButton}
-                                    onPress={handleDeleteRecipe}
-                                >
-                                    <Text style={styles.deleteButtonText}>Delete</Text>
-                                </TouchableOpacity>
+                            {/* Voice Control Buttons */}
+                            {isSpeaking ? (
+                                <>
+                                    <TouchableOpacity 
+                                        style={[styles.voiceButton, styles.pauseButton]}
+                                        onPress={isPaused ? resumeSpeaking : pauseSpeaking}
+                                    >
+                                        <Text style={styles.voiceButtonText}>
+                                            {isPaused ? '▶️' : '⏸️'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.voiceButton, styles.stopButton]}
+                                        onPress={stopSpeaking}
+                                    >
+                                        <Text style={styles.voiceButtonText}>⏹️</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.voiceButton}
+                                        onPress={speakRecipe}
+                                    >
+                                        <Text style={styles.voiceButtonText}>🔊 All</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <TouchableOpacity 
+                                        style={styles.shareButton}
+                                        onPress={handleShareRecipe}
+                                    >
+                                        <Text style={styles.shareButtonText}>Share</Text>
+                                    </TouchableOpacity>
+                                    
+                                    {currentUser?.uid === recipe.userId && (
+                                        <TouchableOpacity 
+                                            style={styles.deleteButton}
+                                            onPress={handleDeleteRecipe}
+                                        >
+                                            <Text style={styles.deleteButtonText}>Delete</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </>
                             )}
                         </View>
                     </View>
                     
-                    {/* HIGHLIGHTED DESCRIPTION */}
+                    {/* Description */}
                     {recipe.description && (
-                        <HighlightedText 
+                        <HighlightableText 
                             text={recipe.description} 
-                            highlight={highlightedText}
+                            section="description" 
                         />
                     )}
                     
-                    <View style={styles.metaInfo}>
-                        <View style={styles.metaItem}>
-                            <Text style={styles.metaIcon}>⏱️</Text>
-                            <Text style={styles.metaText}>Prep: {recipe.prepTime}m</Text>
+                    {/* Meta Info */}
+                    <HighlightableText section="times">
+                        <View style={styles.metaInfo}>
+                            <View style={styles.metaItem}>
+                                <Text style={styles.metaIcon}>⏱️</Text>
+                                <Text style={styles.metaText}>Prep: {recipe.prepTime}m</Text>
+                            </View>
+                            <View style={styles.metaItem}>
+                                <Text style={styles.metaIcon}>🍳</Text>
+                                <Text style={styles.metaText}>Cook: {recipe.cookTime}m</Text>
+                            </View>
+                            <View style={styles.metaItem}>
+                                <Text style={styles.metaIcon}>👥</Text>
+                                <Text style={styles.metaText}>{recipe.servings} servings</Text>
+                            </View>
                         </View>
-                        <View style={styles.metaItem}>
-                            <Text style={styles.metaIcon}>🍳</Text>
-                            <Text style={styles.metaText}>Cook: {recipe.cookTime}m</Text>
-                        </View>
-                        <View style={styles.metaItem}>
-                            <Text style={styles.metaIcon}>👥</Text>
-                            <Text style={styles.metaText}>{recipe.servings} servings</Text>
-                        </View>
-                    </View>
+                    </HighlightableText>
 
-                    {/* CURRENTLY SPEAKING INDICATOR */}
-                    {highlightedText && (
-                        <View style={styles.highlightContainer}>
-                            <Text style={styles.highlightLabel}>Now Speaking:</Text>
-                            <Text style={styles.highlightedSentence}>{highlightedText}</Text>
-                            <TouchableOpacity 
-                                style={styles.stopButton}
-                                onPress={stopSpeaking}
-                            >
-                                <Text style={styles.stopButtonText}>⏹️ Stop</Text>
-                            </TouchableOpacity>
+                    {/* Speech Progress */}
+                    {isSpeaking && (
+                        <View style={styles.speechContainer}>
+                            <View style={styles.progressBar}>
+                                <View 
+                                    style={[
+                                        styles.progressFill,
+                                        { width: `${speechProgress}%` }
+                                    ]} 
+                                />
+                            </View>
+                            <Text style={styles.speechStatus}>
+                                {currentSpeakingPart === 'title' && 'Speaking: Recipe Title'}
+                                {currentSpeakingPart === 'description' && 'Speaking: Description'}
+                                {currentSpeakingPart === 'times' && 'Speaking: Cooking Times'}
+                                {currentSpeakingPart === 'ingredients' && 'Speaking: Ingredients'}
+                                {currentSpeakingPart === 'instructions' && 'Speaking: Instructions'}
+                                {isPaused && ' (Paused)'}
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -274,18 +359,22 @@ Shared from Recipe Book App 🍳
                         <Text style={styles.sectionIcon}>📋</Text>
                         <Text style={styles.sectionTitle}>Ingredients</Text>
                         <TouchableOpacity 
-                            style={[styles.sectionVoiceButton, !ttsAvailable && styles.voiceButtonDisabled]}
+                            style={styles.sectionVoiceButton}
                             onPress={speakIngredients}
+                            disabled={isSpeaking}
                         >
                             <Text style={styles.sectionVoiceIcon}>🔈</Text>
                         </TouchableOpacity>
                     </View>
-                    {recipe.ingredients.map((ingredient, index) => (
-                        <View key={index} style={styles.ingredientItem}>
-                            <Text style={styles.ingredientBullet}>•</Text>
-                            <Text style={styles.ingredient}>{ingredient}</Text>
-                        </View>
-                    ))}
+                    
+                    <HighlightableText section="ingredients">
+                        {recipe.ingredients.map((ingredient, index) => (
+                            <View key={index} style={styles.ingredientItem}>
+                                <Text style={styles.ingredientBullet}>•</Text>
+                                <Text style={styles.ingredient}>{ingredient}</Text>
+                            </View>
+                        ))}
+                    </HighlightableText>
                 </View>
 
                 {/* Instructions Section */}
@@ -294,22 +383,26 @@ Shared from Recipe Book App 🍳
                         <Text style={styles.sectionIcon}>👩‍🍳</Text>
                         <Text style={styles.sectionTitle}>Instructions</Text>
                         <TouchableOpacity 
-                            style={[styles.sectionVoiceButton, !ttsAvailable && styles.voiceButtonDisabled]}
+                            style={styles.sectionVoiceButton}
                             onPress={speakInstructions}
+                            disabled={isSpeaking}
                         >
                             <Text style={styles.sectionVoiceIcon}>🔈</Text>
                         </TouchableOpacity>
                     </View>
-                    {recipe.instructions.map((instruction, index) => (
-                        <View key={index} style={styles.instructionStep}>
-                            <View style={styles.stepNumberContainer}>
-                                <Text style={styles.stepNumber}>{index + 1}</Text>
+                    
+                    <HighlightableText section="instructions">
+                        {recipe.instructions.map((instruction, index) => (
+                            <View key={index} style={styles.instructionStep}>
+                                <View style={styles.stepNumberContainer}>
+                                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                                </View>
+                                <View style={styles.instructionTextContainer}>
+                                    <Text style={styles.instructionText}>{instruction}</Text>
+                                </View>
                             </View>
-                            <View style={styles.instructionTextContainer}>
-                                <Text style={styles.instructionText}>{instruction}</Text>
-                            </View>
-                        </View>
-                    ))}
+                        ))}
+                    </HighlightableText>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -350,19 +443,22 @@ const styles = StyleSheet.create({
     },
     voiceButton: {
         backgroundColor: '#FF6B35',
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        minWidth: 60,
         alignItems: 'center',
     },
-    voiceButtonDisabled: {
-        backgroundColor: '#6c757d',
-        opacity: 0.6,
+    pauseButton: {
+        backgroundColor: '#17a2b8',
+    },
+    stopButton: {
+        backgroundColor: '#FF3B30',
     },
     voiceButtonText: {
-        fontSize: 18,
         color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 14,
     },
     shareButton: {
         backgroundColor: '#17a2b8',
@@ -391,12 +487,16 @@ const styles = StyleSheet.create({
         color: '#666666',
         lineHeight: 24,
     },
+    highlightedContainer: {
+        backgroundColor: '#FFF0EB',
+        borderRadius: 8,
+        padding: 8,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF6B35',
+    },
     highlightedText: {
-        backgroundColor: '#FFD700',
         color: '#2D2D2D',
         fontWeight: '600',
-        paddingHorizontal: 4,
-        borderRadius: 4,
     },
     metaInfo: {
         flexDirection: 'row',
@@ -423,36 +523,29 @@ const styles = StyleSheet.create({
         color: '#2D2D2D',
         fontWeight: '500',
     },
-    highlightContainer: {
+    speechContainer: {
         backgroundColor: '#FFF0EB',
         padding: 12,
         borderRadius: 8,
-        marginBottom: 16,
-        borderLeftWidth: 4,
-        borderLeftColor: '#FF6B35',
+        marginTop: 8,
     },
-    highlightLabel: {
+    progressBar: {
+        height: 6,
+        backgroundColor: '#FFE5D9',
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 8,
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: '#FF6B35',
+        borderRadius: 3,
+    },
+    speechStatus: {
         fontSize: 12,
         color: '#FF6B35',
         fontWeight: '600',
-        marginBottom: 4,
-    },
-    highlightedSentence: {
-        fontSize: 14,
-        color: '#2D2D2D',
-        fontWeight: '500',
-        marginBottom: 8,
-    },
-    stopButton: {
-        backgroundColor: '#FF3B30',
-        paddingVertical: 8,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    stopButtonText: {
-        color: '#FFFFFF',
-        fontWeight: '600',
-        fontSize: 12,
+        textAlign: 'center',
     },
     section: {
         backgroundColor: '#FFFFFF',
