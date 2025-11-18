@@ -50,28 +50,28 @@ export default function RecipeDetailScreen({ route, navigation }) {
         }
     };
 
-    const speakRecipe = async () => {
-        const recipeText = `
-            ${recipe.title}. 
-            ${recipe.description ? `${recipe.description}. ` : ''}
-            Preparation time: ${recipe.prepTime} minutes. 
-            Cook time: ${recipe.cookTime} minutes. 
-            Total time: ${recipe.totalTime} minutes. 
-            Servings: ${recipe.servings}. 
-            Ingredients: ${recipe.ingredients.map((ing, idx) => `${idx + 1}. ${ing}`).join('. ')}.
-            Instructions: ${recipe.instructions.map((inst, idx) => `Step ${idx + 1}. ${inst}`).join('. ')}.
-        `.trim();
+   const speakRecipe = async () => {
+    const recipeText = `
+        Recipe: ${recipe.title}. 
+        ${recipe.description ? `Description: ${recipe.description}. ` : ''}
+        Preparation time: ${recipe.prepTime || 0} minutes. 
+        Cook time: ${recipe.cookTime || 0} minutes. 
+        Total time: ${recipe.totalTime || 0} minutes. 
+        Servings: ${recipe.servings || 1}. 
+        Ingredients: ${recipe.ingredients.map((ing, idx) => `Ingredient ${idx + 1}: ${ing}`).join('. ')}.
+        Instructions: ${recipe.instructions.map((inst, idx) => `Step ${idx + 1}: ${inst}`).join('. ')}.
+    `.trim();
 
-        await TTSService.speakWithHighlight(recipeText, handleHighlight);
-    };
+    await TTSService.speakWithHighlight(recipeText, handleHighlight);
+};
 
-    const speakInstructionsOnly = async () => {
-        const instructionsText = recipe.instructions.map((inst, idx) => 
-            `Step ${idx + 1}. ${inst}`
-        ).join('. ');
+const speakInstructionsOnly = async () => {
+    const instructionsText = recipe.instructions.map((inst, idx) => 
+        `Step ${idx + 1}: ${inst}`
+    ).join('. ');
 
-        await TTSService.speakWithHighlight(instructionsText, handleHighlight);
-    };
+    await TTSService.speakWithHighlight(instructionsText, handleHighlight);
+};
 
     const handlePauseResume = () => {
         if (isPaused) {
@@ -164,27 +164,34 @@ Shared from Recipe Book App 🍳
     };
 
     // Highlight text function
-    const HighlightedText = ({ text, highlight }) => {
-        if (!highlight || !text.includes(highlight)) {
-            return <Text style={styles.normalText}>{text}</Text>;
-        }
+   // Highlight text function - more flexible matching
+const HighlightedText = ({ text, highlight }) => {
+    if (!highlight || !text) {
+        return <Text style={styles.normalText}>{text}</Text>;
+    }
 
-        const parts = text.split(new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-        
-        return (
-            <Text style={styles.normalText}>
-                {parts.map((part, index) => 
-                    part.toLowerCase() === highlight.toLowerCase() ? (
-                        <Text key={index} style={styles.highlightedText}>
-                            {part}
-                        </Text>
-                    ) : (
-                        <Text key={index}>{part}</Text>
-                    )
-                )}
-            </Text>
-        );
-    };
+    // Clean the highlight text for better matching
+    const cleanHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').trim();
+    
+    // Try to find the highlight in the text
+    const index = text.toLowerCase().indexOf(cleanHighlight.toLowerCase());
+    
+    if (index === -1) {
+        return <Text style={styles.normalText}>{text}</Text>;
+    }
+
+    const before = text.substring(0, index);
+    const matched = text.substring(index, index + cleanHighlight.length);
+    const after = text.substring(index + cleanHighlight.length);
+
+    return (
+        <Text style={styles.normalText}>
+            {before}
+            <Text style={styles.highlightedText}>{matched}</Text>
+            {after}
+        </Text>
+    );
+};
 
     return (
         <SafeAreaView style={styles.container}>

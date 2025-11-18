@@ -45,6 +45,40 @@ export default function HomeScreen({ navigation }) {
         ]);
     };
 
+    const handleQuickShare = async (recipe) => {
+    try {
+        const shareContent = `
+🍽️ ${recipe.title}
+
+${recipe.description ? `${recipe.description}\n` : ''}
+
+⏱️ Prep: ${recipe.prepTime}m | Cook: ${recipe.cookTime}m | Total: ${recipe.totalTime}m
+👨‍👩‍👧‍👦 Servings: ${recipe.servings}
+
+📋 INGREDIENTS:
+${recipe.ingredients.map(ingredient => `• ${ingredient}`).join('\n')}
+
+👩‍🍳 INSTRUCTIONS:
+${recipe.instructions.map((instruction, index) => `${index + 1}. ${instruction}`).join('\n')}
+
+${recipe.tags && recipe.tags.length > 0 ? `\n🏷️ Tags: ${recipe.tags.join(', ')}` : ''}
+
+Shared from Recipe Book App 🍳
+        `.trim();
+
+        const result = await Share.share({
+            message: shareContent,
+            title: `Share Recipe: ${recipe.title}`
+        });
+
+        if (result.action === Share.sharedAction) {
+            console.log('Recipe shared successfully');
+        }
+    } catch (error) {
+        Alert.alert('Error', 'Failed to share recipe: ' + error.message);
+    }
+};
+
     const loadRecipes = async () => {
         try {
             setLoading(true);
@@ -142,43 +176,7 @@ export default function HomeScreen({ navigation }) {
         }
     };
 
-    const handleUserShare = (recipe) => {
-        navigation.navigate('UserShare', { recipe });
-    };
-
-    const handleQuickShare = async (recipe) => {
-        try {
-            const shareContent = `
-🍽️ ${recipe.title}
-
-${recipe.description ? `${recipe.description}\n` : ''}
-
-⏱️ Prep: ${recipe.prepTime}m | Cook: ${recipe.cookTime}m | Total: ${recipe.totalTime}m
-👨‍👩‍👧‍👦 Servings: ${recipe.servings}
-
-📋 INGREDIENTS:
-${recipe.ingredients.map(ingredient => `• ${ingredient}`).join('\n')}
-
-👩‍🍳 INSTRUCTIONS:
-${recipe.instructions.map((instruction, index) => `${index + 1}. ${instruction}`).join('\n')}
-
-${recipe.tags && recipe.tags.length > 0 ? `\n🏷️ Tags: ${recipe.tags.join(', ')}` : ''}
-
-Shared from Recipe Book App 🍳
-            `.trim();
-
-            const result = await Share.share({
-                message: shareContent,
-                title: `Share Recipe: ${recipe.title}`
-            });
-
-            if (result.action === Share.sharedAction) {
-                console.log('Recipe shared successfully');
-            }
-        } catch (error) {
-            Alert.alert('Error', 'Failed to share recipe: ' + error.message);
-        }
-    };
+   
 
     const handleUnpinRecipe = async (pinnedRecipeId) => {
         try {
@@ -265,12 +263,12 @@ Shared from Recipe Book App 🍳
                         </TouchableOpacity>
                     ) : (
                         <>
-                            <TouchableOpacity 
+                           {/*<TouchableOpacity 
                                 style={styles.userShareButton}
                                 onPress={() => handleUserShare(item)}
                             >
                                 <Text style={styles.userShareButtonText}>👤</Text>
-                            </TouchableOpacity>
+                            </TouchableOpacity> */} 
                             <TouchableOpacity 
                                 style={styles.quickShareButton}
                                 onPress={() => handleQuickShare(item)}
@@ -288,7 +286,7 @@ Shared from Recipe Book App 🍳
                                     <Text style={styles.shareButtonText}>
                                         {item.isShared ? 'Published' : 'Publish'}
                                     </Text>
-                                </TouchableOpacity>
+                                </TouchableOpacity> 
                             )}
                         </>
                     )}

@@ -588,55 +588,54 @@ class FirebaseServiceClass {
     }
   }
 
-  // ---------- User Search for Sharing ----------
-  async searchUsers(searchQuery) {
+  // ✅ CORRECT - Fixed version
+async searchUsers(searchQuery) {
     try {
-      console.log('Searching users:', searchQuery);
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      if (!searchQuery || searchQuery.length < 2) {
-        return [];
-      }
-
-      const usersCollection = collection(db, 'users');
-      const q = query(
-        usersCollection,
-        where('name', '>=', searchQuery),
-        where('name', '<=', searchQuery + '\uf8ff'),
-        orderBy('name'),
-        limit(10)
-      );
-
-      const querySnapshot = await getDocs(q);
-      const users = [];
-
-      querySnapshot.forEach((doc) => {
-        const userData = doc.data();
-        // Don't include current user in search results
-        if (doc.id !== user.uid) {
-          users.push({
-            uid: doc.id,
-            ...userData
-          });
+        console.log('Searching users:', searchQuery);
+        const user = auth.currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
         }
-      });
 
-      console.log(`Found ${users.length} users`);
-      return users;
+        if (!searchQuery || searchQuery.length < 2) {
+            return [];
+        }
+
+        const usersCollection = collection(db, 'users');
+        const q = query(
+            usersCollection,
+            where('name', '>=', searchQuery),
+            where('name', '<=', searchQuery + '\uf8ff'),
+            orderBy('name'),
+            limit(10)
+        );
+
+        const querySnapshot = await getDocs(q);
+        const users = [];
+
+        querySnapshot.forEach((doc) => {
+            const userData = doc.data();
+            // Don't include current user in search results
+            if (doc.id !== user.uid) {
+                users.push({
+                    uid: doc.id,
+                    ...userData
+                });
+            }
+        });
+
+        console.log(`Found ${users.length} users`);
+        return users;
     } catch (error) {
-      console.error('Error searching users:', error);
-      // If index doesn't exist, return empty array
-      if (error.code === 'failed-precondition') {
-        console.log('Index required for user search');
-        return [];
-      }
-      throw new Error(`Failed to search users: ${error.message}`);
+        console.error('Error searching users:', error);
+        // If index doesn't exist, return empty array
+        if (error.code === 'failed-precondition') {
+            console.log('Index required for user search');
+            return [];
+        }
+        throw new Error(`Failed to search users: ${error.message}`);
     }
-  }
-
+}
   // ---------- Share Recipe with Specific User ----------
   async shareRecipeWithUser(recipeId, targetUserId, message = '') {
     try {
