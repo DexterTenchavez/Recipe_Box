@@ -33,16 +33,12 @@ class FirebaseServiceClass {
     return false;
   }
 
-  // ---------- Authentication ----------
   async registerUser(name, email, password) {
     try {
-      console.log('Starting user registration...');
       if (!name || !email || !password) throw new Error('All fields are required');
 
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
-      console.log('User created successfully:', user.uid);
 
-      // Update profile and create user document
       await updateProfile(user, { displayName: name });
       await setDoc(doc(db, 'users', user.uid), {
         name,
@@ -51,10 +47,8 @@ class FirebaseServiceClass {
         updatedAt: serverTimestamp()
       });
 
-      console.log('User profile and document created');
       return { uid: user.uid, name, email };
     } catch (error) {
-      console.error('Registration error:', error);
       if (error.code === 'auth/email-already-in-use') {
         throw new Error('This email is already registered.');
       } else if (error.code === 'auth/weak-password') {
@@ -68,13 +62,10 @@ class FirebaseServiceClass {
 
   async loginUser(email, password) {
     try {
-      console.log('Starting user login...');
       if (!email || !password) throw new Error('Email and password are required');
 
       const { user } = await signInWithEmailAndPassword(auth, email, password);
-      console.log('User logged in successfully:', user.uid);
 
-      // Get user data from Firestore
       let userData = {};
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -94,7 +85,6 @@ class FirebaseServiceClass {
 
       return completeUserData;
     } catch (error) {
-      console.error('Login error:', error);
       if (error.code === 'auth/user-not-found') {
         throw new Error('No account found with this email.');
       } else if (error.code === 'auth/wrong-password') {
@@ -108,18 +98,13 @@ class FirebaseServiceClass {
     }
   }
 
-  // ---------- Recipe Management ----------
   async addRecipe(recipeData) {
     try {
-      console.log('Starting to add recipe...');
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated. Please log in again.');
       }
 
-      console.log('User authenticated:', user.uid);
-
-      // Validate required fields
       if (!recipeData.title?.trim()) {
         throw new Error('Recipe title is required');
       }
@@ -135,24 +120,17 @@ class FirebaseServiceClass {
         userId: user.uid,
         userName: user.displayName || 'Anonymous',
         userEmail: user.email,
-        isShared: false, // Default to private
+        isShared: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         totalTime: (parseInt(recipeData.prepTime) || 0) + (parseInt(recipeData.cookTime) || 0)
       };
 
-      console.log('Recipe data prepared:', recipeWithUser);
-
       const recipesCollection = collection(db, 'recipes');
       const docRef = await addDoc(recipesCollection, recipeWithUser);
       
-      console.log('Recipe added successfully with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
-      console.error('Error adding recipe:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
       if (error.code === 'unavailable') {
         throw new Error('Network error: Please check your internet connection and try again.');
       } else if (error.code === 'permission-denied') {
@@ -165,13 +143,10 @@ class FirebaseServiceClass {
 
   async getUserRecipes() {
     try {
-      console.log('Fetching user recipes...');
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated. Please log in again.');
       }
-
-      console.log('User authenticated for recipe fetch:', user.uid);
 
       const recipesCollection = collection(db, 'recipes');
       const q = query(
@@ -180,7 +155,6 @@ class FirebaseServiceClass {
         orderBy('createdAt', 'desc')
       );
 
-      console.log('Executing Firestore query...');
       const querySnapshot = await getDocs(q);
       const recipes = [];
 
@@ -200,13 +174,8 @@ class FirebaseServiceClass {
         });
       });
 
-      console.log(`Found ${recipes.length} recipes for user`);
       return recipes;
     } catch (error) {
-      console.error('Error getting user recipes:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
       if (error.code === 'unavailable') {
         throw new Error('Network error: Please check your internet connection.');
       } else if (error.code === 'permission-denied') {
@@ -219,7 +188,6 @@ class FirebaseServiceClass {
 
   async getPublicRecipes() {
     try {
-      console.log('Fetching public recipes...');
       const user = auth.currentUser;
       if (!user) {
         throw new Error('Please log in to view public recipes');
@@ -252,10 +220,8 @@ class FirebaseServiceClass {
         });
       });
 
-      console.log(`Found ${recipes.length} public recipes`);
       return recipes;
     } catch (error) {
-      console.error('Error getting public recipes:', error);
       if (error.code === 'permission-denied') {
         throw new Error('Permission denied.');
       } else if (error.code === 'failed-precondition') {
@@ -269,13 +235,11 @@ class FirebaseServiceClass {
 
   async shareRecipe(recipeId) {
     try {
-      console.log('Sharing recipe:', recipeId);
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // First, verify the user owns this recipe
       const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
       if (!recipeDoc.exists()) {
         throw new Error('Recipe not found');
@@ -292,10 +256,8 @@ class FirebaseServiceClass {
         updatedAt: serverTimestamp()
       });
 
-      console.log('Recipe shared successfully');
       return true;
     } catch (error) {
-      console.error('Error sharing recipe:', error);
       if (error.code === 'permission-denied') {
         throw new Error('Permission denied.');
       }
@@ -305,7 +267,6 @@ class FirebaseServiceClass {
 
   async unshareRecipe(recipeId) {
     try {
-      console.log('Unsharing recipe:', recipeId);
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated');
@@ -326,10 +287,8 @@ class FirebaseServiceClass {
         updatedAt: serverTimestamp()
       });
 
-      console.log('Recipe unshared successfully');
       return true;
     } catch (error) {
-      console.error('Error unsharing recipe:', error);
       if (error.code === 'permission-denied') {
         throw new Error('Permission denied.');
       }
@@ -339,13 +298,11 @@ class FirebaseServiceClass {
 
   async deleteRecipe(recipeId) {
     try {
-      console.log('Deleting recipe:', recipeId);
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // First, verify the user owns this recipe
       const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
       if (!recipeDoc.exists()) {
         throw new Error('Recipe not found');
@@ -356,16 +313,11 @@ class FirebaseServiceClass {
         throw new Error('You can only delete your own recipes');
       }
 
-      // Delete any pinned versions of this recipe
       await this.deletePinnedRecipeFromAllUsers(recipeId);
-      
-      // Delete the recipe itself
       await deleteDoc(doc(db, 'recipes', recipeId));
       
-      console.log('Recipe deleted successfully');
       return true;
     } catch (error) {
-      console.error('Error deleting recipe:', error);
       if (error.code === 'permission-denied') {
         throw new Error('Permission denied.');
       }
@@ -373,10 +325,8 @@ class FirebaseServiceClass {
     }
   }
 
-  // ---------- Pinned Recipes ----------
   async getPinnedRecipes() {
     try {
-      console.log('Fetching pinned recipes...');
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated');
@@ -405,10 +355,8 @@ class FirebaseServiceClass {
         });
       });
 
-      console.log(`Found ${pinnedRecipes.length} pinned recipes`);
       return pinnedRecipes;
     } catch (error) {
-      console.error('Error getting pinned recipes:', error);
       if (error.code === 'permission-denied' || error.code === 'not-found') {
         return [];
       } else if (error.code === 'unavailable') {
@@ -420,13 +368,11 @@ class FirebaseServiceClass {
 
   async pinRecipe(recipe) {
     try {
-      console.log('Pinning recipe:', recipe.id);
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // Check if already pinned
       const isAlreadyPinned = await this.isRecipePinned(recipe.id);
       if (isAlreadyPinned) {
         throw new Error('Recipe is already pinned');
@@ -452,7 +398,6 @@ class FirebaseServiceClass {
         tags: recipe.tags || []
       };
 
-      // Remove Firestore timestamps that can't be copied
       delete pinnedRecipe.createdAt;
       delete pinnedRecipe.updatedAt;
       delete pinnedRecipe.sharedAt;
@@ -460,10 +405,8 @@ class FirebaseServiceClass {
       const pinnedCollection = collection(db, 'users', user.uid, 'pinnedRecipes');
       const docRef = await addDoc(pinnedCollection, pinnedRecipe);
 
-      console.log('Recipe pinned successfully with ID:', docRef.id);
       return true;
     } catch (error) {
-      console.error('Error pinning recipe:', error);
       if (error.code === 'permission-denied') {
         throw new Error('Permission denied.');
       }
@@ -473,7 +416,6 @@ class FirebaseServiceClass {
 
   async unpinRecipe(recipeId) {
     try {
-      console.log('Unpinning recipe:', recipeId);
       const user = auth.currentUser;
       if (!user) {
         throw new Error('User not authenticated');
@@ -487,17 +429,14 @@ class FirebaseServiceClass {
         throw new Error('Pinned recipe not found');
       }
 
-      // Delete all pinned instances (should only be one)
       const deletePromises = [];
       querySnapshot.forEach((doc) => {
         deletePromises.push(deleteDoc(doc.ref));
       });
 
       await Promise.all(deletePromises);
-      console.log('Recipe unpinned successfully');
       return true;
     } catch (error) {
-      console.error('Error unpinning recipe:', error);
       if (error.code === 'permission-denied') {
         throw new Error('Permission denied.');
       }
@@ -525,9 +464,6 @@ class FirebaseServiceClass {
 
   async deletePinnedRecipeFromAllUsers(recipeId) {
     try {
-      console.log('Deleting pinned recipe from all users:', recipeId);
-      // This would require a cloud function for production
-      // For now, we only delete from current user's pinned recipes
       const user = auth.currentUser;
       if (!user) return;
 
@@ -545,13 +481,11 @@ class FirebaseServiceClass {
       });
 
       await Promise.all(deletePromises);
-      console.log('Pinned recipes deleted successfully');
     } catch (error) {
       console.error('Error deleting pinned recipes:', error);
     }
   }
 
-  // ---------- User Management ----------
   async getUserData(userId) {
     try {
       const userDoc = await getDoc(doc(db, 'users', userId));
@@ -578,7 +512,6 @@ class FirebaseServiceClass {
     }
   }
 
-  // ---------- Search ----------
   async searchRecipes(searchQuery, filters = {}) {
     try {
       const user = auth.currentUser;
@@ -590,7 +523,6 @@ class FirebaseServiceClass {
       const recipesCollection = collection(db, 'recipes');
       
       if (searchQuery) {
-        // Simple search by title (case insensitive)
         q = query(
           recipesCollection,
           where('title', '>=', searchQuery.toLowerCase()),
@@ -598,7 +530,6 @@ class FirebaseServiceClass {
           orderBy('title')
         );
       } else {
-        // If no search query, return user's recipes
         q = query(
           recipesCollection,
           where('userId', '==', user.uid),
@@ -632,22 +563,17 @@ class FirebaseServiceClass {
     }
   }
 
-  // ---------- Google Sign-In ----------
   async loginWithGoogle(id_token) {
     try {
-      console.log('Starting Google sign-in...');
       if (!id_token) throw new Error('Google Sign-In token is required');
 
       const credential = GoogleAuthProvider.credential(id_token);
       const { user } = await signInWithCredential(auth, credential);
-      console.log('Google sign-in successful:', user.uid);
 
-      // Check if user document exists, create if not
       const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
       
       if (!userDoc.exists()) {
-        console.log('Creating new user document for Google user');
         await setDoc(userDocRef, {
           name: user.displayName || 'Anonymous',
           email: user.email,
@@ -662,206 +588,191 @@ class FirebaseServiceClass {
         email: user.email
       };
     } catch (error) {
-      console.error('Google login error:', error);
       throw new Error(`Google sign-in failed: ${error.message}`);
     }
   }
 
-
-  // Add to FirebaseService.js
-static async getAllUsers() {
+  async getAllUsers() {
     try {
-        const usersSnapshot = await db.collection('users').get();
-        return usersSnapshot.docs.map(doc => ({
-            uid: doc.id,
-            ...doc.data()
-        }));
+      const usersCollection = collection(db, 'users');
+      const usersSnapshot = await getDocs(usersCollection);
+      const users = usersSnapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      }));
+      return users;
     } catch (error) {
-        throw new Error('Failed to load users: ' + error.message);
+      throw new Error('Failed to load users: ' + error.message);
     }
-}
+  }
 
-static async shareRecipeWithUser(recipeId, userEmail, message = '') {
+  async shareRecipeWithUser(recipeId, userEmail, message = '') {
     try {
-        // Get the recipe
-        const recipeDoc = await db.collection('recipes').doc(recipeId).get();
-        if (!recipeDoc.exists) {
-            throw new Error('Recipe not found');
-        }
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-        const recipe = { id: recipeDoc.id, ...recipeDoc.data() };
-        
-        // Find the user by email
-        const usersSnapshot = await db.collection('users')
-            .where('email', '==', userEmail.toLowerCase())
-            .get();
-            
-        if (usersSnapshot.empty) {
-            throw new Error('User not found with this email');
-        }
+      const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
+      if (!recipeDoc.exists()) {
+        throw new Error('Recipe not found');
+      }
 
-        const targetUser = usersSnapshot.docs[0];
-        
-        // Add to shared recipes collection
-        await db.collection('sharedRecipes').add({
-            recipeId: recipeId,
-            recipeData: recipe,
-            sharedBy: auth.currentUser.uid,
-            sharedByUserName: auth.currentUser.displayName || 'Anonymous',
-            sharedWith: targetUser.id,
-            sharedWithEmail: userEmail.toLowerCase(),
-            message: message,
-            sharedAt: new Date(),
-            createdAt: new Date()
+      const recipeData = recipeDoc.data();
+      const recipe = { 
+        id: recipeDoc.id, 
+        ...recipeData
+      };
+
+      const usersCollection = collection(db, 'users');
+      const q = query(usersCollection, where('email', '==', userEmail.toLowerCase()));
+      const usersSnapshot = await getDocs(q);
+          
+      if (usersSnapshot.empty) {
+        throw new Error(`User with email "${userEmail}" not found. Make sure they have an account.`);
+      }
+
+      const targetUser = usersSnapshot.docs[0];
+      const targetUserData = targetUser.data();
+      
+      if (targetUser.id === user.uid) {
+        throw new Error('You cannot share a recipe with yourself');
+      }
+
+      const sharedRecipeData = {
+        recipeId: recipeId,
+        recipeData: recipe,
+        sharedBy: user.uid,
+        sharedByUserName: user.displayName || 'Anonymous',
+        sharedByEmail: user.email,
+        sharedWith: targetUser.id,
+        sharedWithEmail: userEmail.toLowerCase(),
+        sharedWithUserName: targetUserData.name || 'User',
+        message: message,
+        sharedAt: serverTimestamp()
+      };
+
+      const sharedRecipesCollection = collection(db, 'sharedRecipes');
+      await addDoc(sharedRecipesCollection, sharedRecipeData);
+
+      return { success: true };
+    } catch (error) {
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied to share recipe');
+      } else if (error.code === 'not-found') {
+        throw new Error('User or recipe not found');
+      }
+      throw new Error(`Failed to share recipe: ${error.message}`);
+    }
+  }
+
+  async getSharedRecipes() {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const sharedCollection = collection(db, 'sharedRecipes');
+      const q = query(
+        sharedCollection,
+        where('sharedWith', '==', user.uid),
+        orderBy('sharedAt', 'desc')
+      );
+
+      const querySnapshot = await getDocs(q);
+      const sharedRecipes = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        sharedRecipes.push({
+          id: doc.id,
+          ...data,
+          recipeData: data.recipeData || {},
+          sharedByUserName: data.sharedByUserName || 'Anonymous',
+          sharedAt: data.sharedAt?.toDate?.() || new Date()
         });
+      });
 
-        return { success: true };
+      return sharedRecipes;
     } catch (error) {
-        throw new Error('Failed to share recipe: ' + error.message);
+      if (error.code === 'permission-denied' || error.code === 'not-found') {
+        return [];
+      }
+      throw new Error(`Failed to load shared recipes: ${error.message}`);
     }
-}
+  }
 
-// Add these functions to your FirebaseService class
-
-// Get shared recipes
-async getSharedRecipes() {
+  async removeSharedRecipe(sharedRecipeId) {
     try {
-        console.log('Fetching shared recipes...');
-        const user = auth.currentUser;
-        if (!user) {
-            throw new Error('User not authenticated');
-        }
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-        const sharedCollection = collection(db, 'sharedRecipes');
-        const q = query(
-            sharedCollection,
-            where('sharedWith', '==', user.uid),
-            orderBy('sharedAt', 'desc')
-        );
+      const sharedDoc = await getDoc(doc(db, 'sharedRecipes', sharedRecipeId));
+      if (!sharedDoc.exists()) {
+        throw new Error('Shared recipe not found');
+      }
 
-        const querySnapshot = await getDocs(q);
-        const sharedRecipes = [];
+      const sharedData = sharedDoc.data();
+      if (sharedData.sharedWith !== user.uid) {
+        throw new Error('You can only remove recipes shared with you');
+      }
 
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            sharedRecipes.push({
-                id: doc.id,
-                ...data,
-                recipeData: data.recipeData || {},
-                sharedByUserName: data.sharedByUserName || 'Anonymous',
-                sharedAt: data.sharedAt?.toDate?.() || new Date()
-            });
-        });
-
-        console.log(`Found ${sharedRecipes.length} shared recipes`);
-        return sharedRecipes;
+      await deleteDoc(doc(db, 'sharedRecipes', sharedRecipeId));
+      return true;
     } catch (error) {
-        console.error('Error getting shared recipes:', error);
-        if (error.code === 'permission-denied' || error.code === 'not-found') {
-            return [];
-        }
-        throw new Error(`Failed to load shared recipes: ${error.message}`);
+      throw new Error(`Failed to remove shared recipe: ${error.message}`);
     }
-}
+  }
 
-// Get all users
-async getAllUsers() {
-    try {
-        console.log('Fetching all users...');
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const users = usersSnapshot.docs.map(doc => ({
-            uid: doc.id,
-            ...doc.data()
-        }));
-        
-        console.log(`Found ${users.length} users`);
-        return users;
-    } catch (error) {
-        console.error('Error getting users:', error);
-        throw new Error('Failed to load users: ' + error.message);
-    }
-}
-
-// Remove shared recipe
-async removeSharedRecipe(sharedRecipeId) {
-    try {
-        console.log('Removing shared recipe:', sharedRecipeId);
-        const user = auth.currentUser;
-        if (!user) {
-            throw new Error('User not authenticated');
-        }
-
-        // Verify the shared recipe belongs to current user
-        const sharedDoc = await getDoc(doc(db, 'sharedRecipes', sharedRecipeId));
-        if (!sharedDoc.exists()) {
-            throw new Error('Shared recipe not found');
-        }
-
-        const sharedData = sharedDoc.data();
-        if (sharedData.sharedWith !== user.uid) {
-            throw new Error('You can only remove recipes shared with you');
-        }
-
-        await deleteDoc(doc(db, 'sharedRecipes', sharedRecipeId));
-        console.log('Shared recipe removed successfully');
-        return true;
-    } catch (error) {
-        console.error('Error removing shared recipe:', error);
-        throw new Error(`Failed to remove shared recipe: ${error.message}`);
-    }
-}
-
-  // ---------- Logout ----------
   async logoutUser() {
     try {
-      console.log('Logging out user...');
       await signOut(auth);
-      console.log('User logged out successfully');
     } catch (error) {
-      console.error('Logout error:', error);
       throw new Error(`Logout failed: ${error.message}`);
     }
   }
 
-  // ---------- Auth State Listener ----------
   onAuthStateChange(callback) {
     return onAuthStateChanged(auth, callback);
   }
 
-  // ---------- Utility Methods ----------
   getCurrentUser() {
     return auth.currentUser;
   }
 
-  async testFirestoreConnection() {
-    try {
-      console.log('Testing Firestore connection...');
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('Please log in to test Firestore connection');
-      }
-
-      const testCollection = collection(db, '_connection_test');
-      const testDoc = await addDoc(testCollection, {
-        test: true,
-        userId: user.uid,
-        timestamp: serverTimestamp()
-      });
-      
-      await deleteDoc(doc(db, '_connection_test', testDoc.id));
-      
-      console.log('Firestore connection test successful');
-      return true;
-    } catch (error) {
-      console.error('Firestore connection test failed:', error);
-      if (error.code === 'permission-denied') {
-        throw new Error('Firestore permission denied.');
-      }
-      return false;
+async testFirestoreConnection() {
+  try {
+    console.log('Testing Firestore connection...');
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('Please log in to test Firestore connection');
     }
-  }
 
-  // ---------- Data Fix Methods ----------
+    // Test with a simple read operation instead of write
+    const usersCollection = collection(db, 'users');
+    const userDoc = doc(usersCollection, user.uid);
+    
+    // Try to read the user's document
+    const userSnapshot = await getDoc(userDoc);
+    
+    if (userSnapshot.exists()) {
+      console.log('Firestore connection test successful - User document found');
+      return true;
+    } else {
+      console.log('Firestore connection test successful - No user document (this is ok)');
+      return true;
+    }
+  } catch (error) {
+    console.error('Firestore connection test failed:', error);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    throw error;
+  }
+}
+
   async fixIsSharedDataTypes() {
     try {
       const user = auth.currentUser;
@@ -895,5 +806,4 @@ async removeSharedRecipe(sharedRecipeId) {
   }
 }
 
-// Export a single instance
 export const FirebaseService = new FirebaseServiceClass();

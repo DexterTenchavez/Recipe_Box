@@ -10,7 +10,8 @@ import {
     TextInput,
     ScrollView,
     Modal,
-    RefreshControl
+    RefreshControl,
+    FlatList
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,7 +28,6 @@ export default function HomeScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('myRecipes');
     
-    // New states for user sharing
     const [showUserShareModal, setShowUserShareModal] = useState(false);
     const [selectedRecipe, setSelectedRecipe] = useState(null);
     const [shareEmail, setShareEmail] = useState('');
@@ -133,9 +133,10 @@ Shared from Recipe Book App 🍳
             setShowUserShareModal(false);
             setShareEmail('');
             setShareMessage('');
+            setSearchUserQuery('');
             
         } catch (error) {
-            Alert.alert('Error', error.message || 'Failed to share recipe with user');
+            Alert.alert('Error', error.message);
         } finally {
             setLoading(false);
         }
@@ -154,9 +155,10 @@ Shared from Recipe Book App 🍳
             setShowUserShareModal(false);
             setShareEmail('');
             setShareMessage('');
+            setSearchUserQuery('');
             
         } catch (error) {
-            Alert.alert('Error', error.message || 'Failed to share recipe with user');
+            Alert.alert('Error', error.message);
         } finally {
             setLoading(false);
         }
@@ -192,7 +194,7 @@ Shared from Recipe Book App 🍳
     const handleFixData = async () => {
         Alert.alert(
             'Fix Data Types',
-            'This will fix any recipes with incorrect data types. Run this once if you\'re experiencing errors.',
+            'This will fix any recipes with incorrect data types.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -280,7 +282,6 @@ Shared from Recipe Book App 🍳
         }, [])
     );
 
-    // Filter recipes based on search query and active tab
     const getFilteredRecipes = () => {
         let recipesToFilter = [];
         
@@ -314,10 +315,9 @@ Shared from Recipe Book App 🍳
         );
     };
 
-    // Filter users for the share modal
     const filteredUsers = allUsers.filter(user =>
         user.email.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-        user.name?.toLowerCase().includes(searchUserQuery.toLowerCase())
+        (user.name && user.name.toLowerCase().includes(searchUserQuery.toLowerCase()))
     );
 
     const getEmptyStateMessage = () => {
@@ -452,6 +452,19 @@ Shared from Recipe Book App 🍳
         </TouchableOpacity>
     );
 
+    const renderUserItem = ({ item }) => (
+        <TouchableOpacity
+            style={styles.userItem}
+            onPress={() => shareWithSelectedUser(item.email)}
+        >
+            <View style={styles.userInfo}>
+                <Text style={styles.userName}>{item.name || 'User'}</Text>
+                <Text style={styles.userEmail}>{item.email}</Text>
+            </View>
+            <Text style={styles.shareArrow}>→</Text>
+        </TouchableOpacity>
+    );
+
     const renderTabContent = () => {
         const filteredRecipes = getFilteredRecipes();
 
@@ -490,8 +503,14 @@ Shared from Recipe Book App 🍳
         }
 
         return (
-            <ScrollView 
-                style={styles.scrollView}
+            <FlatList
+                data={filteredRecipes}
+                renderItem={({ item }) => renderRecipeItem({ 
+                    item, 
+                    isPinned: activeTab === 'pinned',
+                    isShared: activeTab === 'shared'
+                })}
+                keyExtractor={item => item.id}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={
@@ -502,23 +521,12 @@ Shared from Recipe Book App 🍳
                         tintColor="#FF6B35"
                     />
                 }
-            >
-                {filteredRecipes.map((item) => (
-                    <View key={item.id}>
-                        {renderRecipeItem({ 
-                            item, 
-                            isPinned: activeTab === 'pinned',
-                            isShared: activeTab === 'shared'
-                        })}
-                    </View>
-                ))}
-            </ScrollView>
+            />
         );
     };
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
                 <View style={styles.userInfo}>
                     <Text style={styles.welcomeText}>Welcome back! 👋</Text>
@@ -543,7 +551,6 @@ Shared from Recipe Book App 🍳
                 </View>
             </View>
 
-            {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <TextInput
                     style={styles.searchInput}
@@ -562,7 +569,6 @@ Shared from Recipe Book App 🍳
                 )}
             </View>
 
-            {/* Tabs */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity 
                     style={[styles.tab, activeTab === 'myRecipes' && styles.activeTab]}
@@ -590,12 +596,10 @@ Shared from Recipe Book App 🍳
                 </TouchableOpacity>
             </View>
 
-            {/* Content */}
             <View style={styles.content}>
                 {renderTabContent()}
             </View>
 
-            {/* Add Recipe FAB */}
             {activeTab === 'myRecipes' && (
                 <TouchableOpacity 
                     style={styles.fab}
@@ -605,7 +609,6 @@ Shared from Recipe Book App 🍳
                 </TouchableOpacity>
             )}
 
-            {/* User Share Modal */}
             <Modal
                 visible={showUserShareModal}
                 animationType="slide"
@@ -620,28 +623,22 @@ Shared from Recipe Book App 🍳
                         <Text style={styles.modalLabel}>Share with user:</Text>
                         
                         <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search users..."
+                            style={styles.modalSearchInput}
+                            placeholder="Search users by name or email..."
                             value={searchUserQuery}
                             onChangeText={setSearchUserQuery}
                             placeholderTextColor="#999"
                         />
                         
-                        <ScrollView style={styles.userList} showsVerticalScrollIndicator={false}>
-                            {filteredUsers.map((user) => (
-                                <TouchableOpacity
-                                    key={user.uid}
-                                    style={styles.userItem}
-                                    onPress={() => shareWithSelectedUser(user.email)}
-                                >
-                                    <View style={styles.userInfo}>
-                                        <Text style={styles.userName}>{user.name}</Text>
-                                        <Text style={styles.userEmail}>{user.email}</Text>
-                                    </View>
-                                    <Text style={styles.shareArrow}>→</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                        <View style={styles.userListContainer}>
+                            <FlatList
+                                data={filteredUsers}
+                                renderItem={renderUserItem}
+                                keyExtractor={item => item.uid}
+                                showsVerticalScrollIndicator={false}
+                                style={styles.userList}
+                            />
+                        </View>
 
                         <Text style={styles.modalLabel}>Or enter email manually:</Text>
                         <TextInput
@@ -700,11 +697,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
         borderBottomColor: '#e9ecef',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
     },
     userInfo: {
         flex: 1,
@@ -809,9 +801,6 @@ const styles = StyleSheet.create({
         color: '#FF6B35',
     },
     content: {
-        flex: 1,
-    },
-    scrollView: {
         flex: 1,
     },
     scrollContent: {
@@ -1053,7 +1042,6 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
     },
-    // Modal styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1067,11 +1055,6 @@ const styles = StyleSheet.create({
         padding: 24,
         width: '100%',
         maxHeight: '80%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
     },
     modalTitle: {
         fontSize: 20,
@@ -1094,6 +1077,16 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         marginTop: 16,
     },
+    modalSearchInput: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        color: '#2D2D2D',
+        marginBottom: 12,
+    },
     textInput: {
         backgroundColor: '#f8f9fa',
         borderWidth: 1,
@@ -1108,9 +1101,12 @@ const styles = StyleSheet.create({
         height: 80,
         textAlignVertical: 'top',
     },
-    userList: {
-        maxHeight: 150,
+    userListContainer: {
+        maxHeight: 200,
         marginBottom: 16,
+    },
+    userList: {
+        flex: 1,
     },
     userItem: {
         flexDirection: 'row',
