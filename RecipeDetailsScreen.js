@@ -17,18 +17,15 @@ export default function RecipeDetailScreen({ route, navigation }) {
     const { recipe } = route.params;
     const currentUser = auth.currentUser;
     
-    // State for speech
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [currentSpeakingPart, setCurrentSpeakingPart] = useState('');
     const [speechProgress, setSpeechProgress] = useState(0);
     
-    // Refs for speech control
     const speechQueue = useRef([]);
     const currentIndex = useRef(0);
     const isSpeakingRef = useRef(false);
 
-    // Split recipe into speakable parts
     const recipeParts = [
         { 
             type: 'title', 
@@ -57,7 +54,6 @@ export default function RecipeDetailScreen({ route, navigation }) {
         }
     ];
 
-    // Speak functions
     const speakRecipe = async () => {
         if (isSpeakingRef.current) {
             await stopSpeaking();
@@ -99,7 +95,6 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
     const speakNextPart = async () => {
         if (currentIndex.current >= speechQueue.current.length) {
-            // Finished speaking all parts
             setIsSpeaking(false);
             isSpeakingRef.current = false;
             setCurrentSpeakingPart('');
@@ -130,14 +125,12 @@ export default function RecipeDetailScreen({ route, navigation }) {
                     setCurrentSpeakingPart('');
                 },
                 onError: (error) => {
-                    console.log('Speech error:', error);
                     Alert.alert('Speech Error', 'Could not speak the text');
                     setIsSpeaking(false);
                     isSpeakingRef.current = false;
                 }
             });
         } catch (error) {
-            console.log('Speech error:', error);
             Alert.alert('Speech Error', 'Could not speak the text');
             setIsSpeaking(false);
             isSpeakingRef.current = false;
@@ -177,14 +170,12 @@ export default function RecipeDetailScreen({ route, navigation }) {
         }
     };
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             stopSpeaking();
         };
     }, []);
 
-    // Highlight components
     const HighlightableText = ({ text, section, children }) => {
         const isHighlighted = currentSpeakingPart === section;
         
@@ -249,7 +240,6 @@ Shared from Recipe Book App 🍳
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                {/* Header Section */}
                 <View style={styles.header}>
                     <View style={styles.headerTop}>
                         <HighlightableText section="title">
@@ -257,7 +247,6 @@ Shared from Recipe Book App 🍳
                         </HighlightableText>
                         
                         <View style={styles.actionButtons}>
-                            {/* Voice Control Buttons */}
                             {isSpeaking ? (
                                 <>
                                     <TouchableOpacity 
@@ -304,7 +293,6 @@ Shared from Recipe Book App 🍳
                         </View>
                     </View>
                     
-                    {/* Description */}
                     {recipe.description && (
                         <HighlightableText 
                             text={recipe.description} 
@@ -312,7 +300,6 @@ Shared from Recipe Book App 🍳
                         />
                     )}
                     
-                    {/* Meta Info */}
                     <HighlightableText section="times">
                         <View style={styles.metaInfo}>
                             <View style={styles.metaItem}>
@@ -330,7 +317,6 @@ Shared from Recipe Book App 🍳
                         </View>
                     </HighlightableText>
 
-                    {/* Speech Progress */}
                     {isSpeaking && (
                         <View style={styles.speechContainer}>
                             <View style={styles.progressBar}>
@@ -353,7 +339,6 @@ Shared from Recipe Book App 🍳
                     )}
                 </View>
 
-                {/* Ingredients Section */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionIcon}>📋</Text>
@@ -377,7 +362,6 @@ Shared from Recipe Book App 🍳
                     </HighlightableText>
                 </View>
 
-                {/* Instructions Section */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionIcon}>👩‍🍳</Text>
