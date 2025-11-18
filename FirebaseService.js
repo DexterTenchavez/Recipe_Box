@@ -105,62 +105,62 @@ class FirebaseServiceClass {
     }
   }
 
-  // ---------- Recipe Management ----------
   async addRecipe(recipeData) {
-    try {
-      console.log('Starting to add recipe...');
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('User not authenticated. Please log in again.');
-      }
+  try {
+    console.log('Starting to add recipe...');
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated. Please log in again.');
+    }
 
-      console.log('User authenticated:', user.uid);
+    console.log('User authenticated:', user.uid);
 
-      // Validate required fields
-      if (!recipeData.title?.trim()) {
-        throw new Error('Recipe title is required');
-      }
-      if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
-        throw new Error('At least one ingredient is required');
-      }
-      if (!recipeData.instructions || recipeData.instructions.length === 0) {
-        throw new Error('At least one instruction is required');
-      }
+    // Validate required fields
+    if (!recipeData.title?.trim()) {
+      throw new Error('Recipe title is required');
+    }
+    if (!recipeData.ingredients || recipeData.ingredients.length === 0) {
+      throw new Error('At least one ingredient is required');
+    }
+    if (!recipeData.instructions || recipeData.instructions.length === 0) {
+      throw new Error('At least one instruction is required');
+    }
 
-      const recipeWithUser = {
-        ...recipeData,
-        userId: user.uid,
-        userName: user.displayName || 'Anonymous',
-        userEmail: user.email,
-        isShared: false, // Default to private
-        hasImage: false, // Always false since we removed image picker
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
+    // Ensure boolean values are actual booleans, not strings
+    const recipeWithUser = {
+      ...recipeData,
+      userId: user.uid,
+      userName: user.displayName || 'Anonymous',
+      userEmail: user.email,
+      isShared: false, // Explicit boolean false
+      hasImage: false, // Explicit boolean false
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
 
-      console.log('Recipe data prepared:', recipeWithUser);
+    console.log('Recipe data prepared:', recipeWithUser);
 
-      // Add the recipe to Firestore
-      console.log('Adding recipe to Firestore...');
-      const recipesCollection = collection(db, 'recipes');
-      const docRef = await addDoc(recipesCollection, recipeWithUser);
-      
-      console.log('Recipe added successfully with ID:', docRef.id);
-      return docRef.id;
-    } catch (error) {
-      console.error('Error adding recipe:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable') {
-        throw new Error('Network error: Please check your internet connection and try again.');
-      } else if (error.code === 'permission-denied') {
-        throw new Error('Permission denied: You may not have permission to save recipes. Please make sure you are logged in.');
-      } else {
-        throw new Error(`Failed to save recipe: ${error.message}`);
-      }
+    // Add the recipe to Firestore
+    console.log('Adding recipe to Firestore...');
+    const recipesCollection = collection(db, 'recipes');
+    const docRef = await addDoc(recipesCollection, recipeWithUser);
+    
+    console.log('Recipe added successfully with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error adding recipe:', error);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    
+    if (error.code === 'unavailable') {
+      throw new Error('Network error: Please check your internet connection and try again.');
+    } else if (error.code === 'permission-denied') {
+      throw new Error('Permission denied: You may not have permission to save recipes. Please make sure you are logged in.');
+    } else {
+      throw new Error(`Failed to save recipe: ${error.message}`);
     }
   }
+}
 
   async getUserRecipes() {
     try {
@@ -279,45 +279,45 @@ class FirebaseServiceClass {
     }
   }
 
-  async shareRecipe(recipeId) {
-    try {
-      console.log('Sharing recipe:', recipeId);
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // First, verify the user owns this recipe
-      const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
-      if (!recipeDoc.exists()) {
-        throw new Error('Recipe not found');
-      }
-
-      const recipeData = recipeDoc.data();
-      if (recipeData.userId !== user.uid) {
-        throw new Error('You can only share your own recipes');
-      }
-
-      // Update the recipe to be shared/public
-      await setDoc(doc(db, 'recipes', recipeId), {
-        ...recipeData,
-        isShared: true,
-        sharedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-
-      console.log('Recipe shared successfully');
-      return true;
-    } catch (error) {
-      console.error('Error sharing recipe:', error);
-      console.error('Error code:', error.code);
-      
-      if (error.code === 'permission-denied') {
-        throw new Error('Permission denied: Cannot update recipe. Please make sure you are logged in.');
-      }
-      throw new Error(`Failed to share recipe: ${error.message}`);
+ async shareRecipe(recipeId) {
+  try {
+    console.log('Sharing recipe:', recipeId);
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
     }
+
+    // First, verify the user owns this recipe
+    const recipeDoc = await getDoc(doc(db, 'recipes', recipeId));
+    if (!recipeDoc.exists()) {
+      throw new Error('Recipe not found');
+    }
+
+    const recipeData = recipeDoc.data();
+    if (recipeData.userId !== user.uid) {
+      throw new Error('You can only share your own recipes');
+    }
+
+    // Update the recipe to be shared/public - ensure boolean true
+    await setDoc(doc(db, 'recipes', recipeId), {
+      ...recipeData,
+      isShared: true, // Explicit boolean true
+      sharedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    console.log('Recipe shared successfully');
+    return true;
+  } catch (error) {
+    console.error('Error sharing recipe:', error);
+    console.error('Error code:', error.code);
+    
+    if (error.code === 'permission-denied') {
+      throw new Error('Permission denied: Cannot update recipe. Please make sure you are logged in.');
+    }
+    throw new Error(`Failed to share recipe: ${error.message}`);
   }
+}
 
   async unshareRecipe(recipeId) {
     try {
