@@ -1,4 +1,3 @@
-// AddRecipeScreen.js
 import React, { useState } from 'react';
 import {
     View,
@@ -9,11 +8,9 @@ import {
     ScrollView,
     Alert,
     KeyboardAvoidingView,
-    Platform,
-    Image
+    Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { FirebaseService } from './FirebaseService';
 
 export default function AddRecipeScreen({ navigation }) {
@@ -27,8 +24,6 @@ export default function AddRecipeScreen({ navigation }) {
     const [tags, setTags] = useState([]);
     const [newTag, setNewTag] = useState('');
     const [loading, setLoading] = useState(false);
-    const [image, setImage] = useState(null);
-    const [uploadingImage, setUploadingImage] = useState(false);
 
     const addIngredient = () => {
         setIngredients([...ingredients, '']);
@@ -76,82 +71,6 @@ export default function AddRecipeScreen({ navigation }) {
         setTags(newTags);
     };
 
-    const pickImage = async () => {
-        try {
-            console.log('Starting image picker...');
-            
-            // Check if ImagePicker is available
-            if (!ImagePicker || !ImagePicker.requestMediaLibraryPermissionsAsync) {
-                Alert.alert('Error', 'Image picker is not available. Please make sure expo-image-picker is installed correctly.');
-                return;
-            }
-
-            // Request permissions
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission required', 'Sorry, we need camera roll permissions to add images to your recipe!');
-                return;
-            }
-
-            console.log('Launching image library...');
-            let result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-            });
-
-            console.log('Image picker result:', result);
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setImage(result.assets[0].uri);
-                console.log('Image selected:', result.assets[0].uri);
-            }
-        } catch (error) {
-            console.error('Image picker error:', error);
-            Alert.alert('Error', 'Failed to pick image. Please try again.');
-        }
-    };
-
-    const takePhoto = async () => {
-        try {
-            console.log('Starting camera...');
-            
-            // Check if ImagePicker is available
-            if (!ImagePicker || !ImagePicker.requestCameraPermissionsAsync) {
-                Alert.alert('Error', 'Camera is not available. Please make sure expo-image-picker is installed correctly.');
-                return;
-            }
-
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission required', 'Sorry, we need camera permissions to take a photo of your dish!');
-                return;
-            }
-
-            console.log('Launching camera...');
-            let result = await ImagePicker.launchCameraAsync({
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-            });
-
-            console.log('Camera result:', result);
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                setImage(result.assets[0].uri);
-                console.log('Photo taken:', result.assets[0].uri);
-            }
-        } catch (error) {
-            console.error('Camera error:', error);
-            Alert.alert('Error', 'Failed to take photo. Please try again.');
-        }
-    };
-
-    const removeImage = () => {
-        setImage(null);
-    };
-
     const handleSaveRecipe = async () => {
         if (!title.trim()) {
             Alert.alert('Error', 'Please enter a recipe title');
@@ -183,35 +102,20 @@ export default function AddRecipeScreen({ navigation }) {
                 instructions: filteredInstructions,
                 tags: tags,
                 totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
-                hasImage: !!image
+                hasImage: false // Always false since we removed image picker
             };
 
-            // First, save the recipe
-            const recipeId = await FirebaseService.addRecipe(recipeData);
-            
-            // Then upload image if selected
-            if (image) {
-                setUploadingImage(true);
-                try {
-                    await FirebaseService.uploadRecipeImage(recipeId, image);
-                    console.log('Image uploaded successfully');
-                } catch (imageError) {
-                    console.error('Image upload failed:', imageError);
-                    // Don't fail the entire recipe save if image upload fails
-                    Alert.alert('Warning', 'Recipe saved but image upload failed: ' + imageError.message);
-                }
-            }
+            await FirebaseService.addRecipe(recipeData);
 
             Alert.alert(
                 'Success', 
-                'Recipe added successfully!' + (image ? ' Image uploaded.' : ''),
+                'Recipe added successfully!',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
             );
         } catch (error) {
             Alert.alert('Error', 'Failed to save recipe: ' + error.message);
         } finally {
             setLoading(false);
-            setUploadingImage(false);
         }
     };
 
@@ -234,46 +138,6 @@ export default function AddRecipeScreen({ navigation }) {
                     <View style={styles.header}>
                         <Text style={styles.title}>Add New Recipe</Text>
                         <Text style={styles.subtitle}>Create and share your delicious recipe</Text>
-                    </View>
-
-                    {/* Recipe Image */}
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Recipe Image</Text>
-                        <Text style={styles.hint}>Add a photo of your delicious dish (optional)</Text>
-                        
-                        {image ? (
-                            <View style={styles.imagePreviewContainer}>
-                                <Image 
-                                    source={{ uri: image }} 
-                                    style={styles.previewImage}
-                                    resizeMode="cover"
-                                />
-                                <TouchableOpacity 
-                                    style={styles.removeImageButton}
-                                    onPress={removeImage}
-                                    disabled={loading}
-                                >
-                                    <Text style={styles.removeImageButtonText}>✕</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <View style={styles.imageButtonsContainer}>
-                                <TouchableOpacity 
-                                    style={styles.imageButton}
-                                    onPress={pickImage}
-                                    disabled={loading}
-                                >
-                                    <Text style={styles.imageButtonText}>📁 Choose from Gallery</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={styles.imageButton}
-                                    onPress={takePhoto}
-                                    disabled={loading}
-                                >
-                                    <Text style={styles.imageButtonText}>📷 Take Photo</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
                     </View>
 
                     {/* Recipe Title */}
@@ -495,7 +359,7 @@ export default function AddRecipeScreen({ navigation }) {
                             disabled={!isFormValid || loading}
                         >
                             <Text style={styles.saveButtonText}>
-                                {loading ? (uploadingImage ? 'Uploading Image...' : 'Saving...') : 'Save Recipe'}
+                                {loading ? 'Saving...' : 'Save Recipe'}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -611,54 +475,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 8,
         fontStyle: 'italic',
-    },
-    // Image Styles
-    imagePreviewContainer: {
-        position: 'relative',
-        alignItems: 'center',
-    },
-    previewImage: {
-        width: '100%',
-        height: 200,
-        borderRadius: 12,
-        marginBottom: 12,
-    },
-    removeImageButton: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        backgroundColor: 'rgba(255, 59, 48, 0.9)',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    removeImageButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    imageButtonsContainer: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    imageButton: {
-        flex: 1,
-        backgroundColor: '#FF6B35',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    imageButtonText: {
-        color: '#FFFFFF',
-        fontSize: 14,
-        fontWeight: '600',
     },
     // List Items
     listItem: {

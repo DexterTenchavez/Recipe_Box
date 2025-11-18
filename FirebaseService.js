@@ -133,6 +133,7 @@ class FirebaseServiceClass {
         userName: user.displayName || 'Anonymous',
         userEmail: user.email,
         isShared: false, // Default to private
+        hasImage: false, // Always false since we removed image picker
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -757,46 +758,6 @@ class FirebaseServiceClass {
     } catch (error) {
         console.error('Error removing shared recipe:', error);
         throw new Error(`Failed to remove shared recipe: ${error.message}`);
-    }
-  }
-
-  // ---------- Image Upload ----------
-  async uploadRecipeImage(recipeId, imageUri) {
-    try {
-        console.log('Uploading recipe image:', recipeId);
-        const user = auth.currentUser;
-        if (!user) {
-            throw new Error('User not authenticated');
-        }
-
-        // For React Native, you would use a storage solution like Firebase Storage
-        // This is a simplified version - you'll need to implement actual image upload
-        // based on your storage solution
-
-        const imageData = {
-            recipeId: recipeId,
-            uploadedBy: user.uid,
-            uploadedAt: serverTimestamp(),
-            imageUri: imageUri, // This would be the download URL after upload
-            // Add other image metadata as needed
-        };
-
-        // Store image reference in Firestore
-        const imagesCollection = collection(db, 'recipeImages');
-        const docRef = await addDoc(imagesCollection, imageData);
-
-        // Update recipe with image reference
-        await setDoc(doc(db, 'recipes', recipeId), {
-            imageId: docRef.id,
-            imageUrl: imageUri,
-            updatedAt: serverTimestamp()
-        }, { merge: true });
-
-        console.log('Recipe image uploaded successfully');
-        return docRef.id;
-    } catch (error) {
-        console.error('Error uploading recipe image:', error);
-        throw new Error(`Failed to upload image: ${error.message}`);
     }
   }
 
