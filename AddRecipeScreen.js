@@ -71,53 +71,54 @@ export default function AddRecipeScreen({ navigation }) {
         setTags(newTags);
     };
 
-    const handleSaveRecipe = async () => {
-        if (!title.trim()) {
-            Alert.alert('Error', 'Please enter a recipe title');
-            return;
-        }
+   const handleSaveRecipe = async () => {
+    // Your existing validation code:
+    if (!title.trim()) {
+        Alert.alert('Error', 'Please enter a recipe title');
+        return;
+    }
 
-        const filteredIngredients = ingredients.filter(ing => ing.trim());
-        const filteredInstructions = instructions.filter(inst => inst.trim());
+    const filteredIngredients = ingredients.filter(ing => ing.trim());
+    const filteredInstructions = instructions.filter(inst => inst.trim());
 
-        if (filteredIngredients.length === 0) {
-            Alert.alert('Error', 'Please add at least one ingredient');
-            return;
-        }
+    if (filteredIngredients.length === 0) {
+        Alert.alert('Error', 'Please add at least one ingredient');
+        return;
+    }
 
-        if (filteredInstructions.length === 0) {
-            Alert.alert('Error', 'Please add at least one instruction');
-            return;
-        }
+    if (filteredInstructions.length === 0) {
+        Alert.alert('Error', 'Please add at least one instruction');
+        return;
+    }
 
-        setLoading(true);
-        try {
-            const recipeData = {
-                title: title.trim(),
-                description: description.trim(),
-                prepTime: parseInt(prepTime) || 0,
-                cookTime: parseInt(cookTime) || 0,
-                servings: parseInt(servings) || 1,
-                ingredients: filteredIngredients,
-                instructions: filteredInstructions,
-                tags: tags,
-                totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
-                hasImage: false // Always false since we removed image picker
-            };
+    setLoading(true);
+    try {
+        const recipeData = {
+            title: title.trim(),
+            description: description.trim(),
+            prepTime: parseInt(prepTime) || 0,
+            cookTime: parseInt(cookTime) || 0,
+            servings: parseInt(servings) || 1,
+            ingredients: filteredIngredients,
+            instructions: filteredInstructions,
+            tags: tags,
+            totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
+            // hasImage: false // REMOVED THIS LINE COMPLETELY
+        };
 
-            await FirebaseService.addRecipe(recipeData);
+        await FirebaseService.addRecipe(recipeData);
 
-            Alert.alert(
-                'Success', 
-                'Recipe added successfully!',
-                [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
-        } catch (error) {
-            Alert.alert('Error', 'Failed to save recipe: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+        Alert.alert(
+            'Success', 
+            'Recipe added successfully!',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+    } catch (error) {
+        Alert.alert('Error', 'Failed to save recipe: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+};
 
     const validateForm = () => {
         if (!title.trim()) return false;

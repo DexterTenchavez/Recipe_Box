@@ -105,7 +105,7 @@ class FirebaseServiceClass {
     }
   }
 
-  async addRecipe(recipeData) {
+ async addRecipe(recipeData) {
   try {
     console.log('Starting to add recipe...');
     const user = auth.currentUser;
@@ -126,14 +126,13 @@ class FirebaseServiceClass {
       throw new Error('At least one instruction is required');
     }
 
-    // Ensure boolean values are actual booleans, not strings
     const recipeWithUser = {
       ...recipeData,
       userId: user.uid,
       userName: user.displayName || 'Anonymous',
       userEmail: user.email,
-      isShared: false, // Explicit boolean false
-      hasImage: false, // Explicit boolean false
+      isShared: false, // Keep this as boolean
+      // REMOVE hasImage field completely
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
