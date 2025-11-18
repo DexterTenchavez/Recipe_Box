@@ -34,13 +34,21 @@ export default function PublicRecipesScreen({ navigation }) {
         try {
             setLoading(true);
             const publicRecipes = await FirebaseService.getPublicRecipes();
+            console.log('🔍 Public recipes found:', publicRecipes.length);
+            console.log('📋 Public recipes data:', publicRecipes.map(r => ({ 
+                id: r.id, 
+                title: r.title, 
+                isShared: r.isShared 
+            })));
+            
             setRecipes(publicRecipes);
             
             // Load pinned recipes to show which ones are already pinned
             const pinned = await FirebaseService.getPinnedRecipes();
-            const pinnedIds = new Set(pinned.map(recipe => recipe.id));
+            const pinnedIds = new Set(pinned.map(recipe => recipe.originalRecipeId || recipe.id));
             setPinnedRecipes(pinnedIds);
         } catch (error) {
+            console.error('❌ Error loading public recipes:', error);
             Alert.alert('Error', 'Failed to load public recipes: ' + error.message);
         } finally {
             setLoading(false);
@@ -51,6 +59,28 @@ export default function PublicRecipesScreen({ navigation }) {
     const onRefresh = () => {
         setRefreshing(true);
         loadPublicRecipes();
+    };
+
+    const createTestPublicRecipe = async () => {
+        try {
+            const testRecipe = {
+                title: "Test Public Recipe",
+                description: "This is a test recipe to verify public recipes work",
+                prepTime: 10,
+                cookTime: 20,
+                servings: 4,
+                ingredients: ["Test ingredient 1", "Test ingredient 2"],
+                instructions: ["Test instruction 1", "Test instruction 2"],
+                tags: ["test", "public"],
+                isShared: true // This makes it public
+            };
+            
+            await FirebaseService.addRecipe(testRecipe);
+            Alert.alert('Success', 'Test public recipe created!');
+            loadPublicRecipes();
+        } catch (error) {
+            Alert.alert('Error', 'Failed to create test recipe: ' + error.message);
+        }
     };
 
     const speakRecipePreview = async (recipe) => {
@@ -134,11 +164,11 @@ export default function PublicRecipesScreen({ navigation }) {
 
     const filteredRecipes = recipes.filter(recipe =>
         recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (recipe.description && recipe.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (recipe.tags && recipe.tags.some(tag => 
             tag.toLowerCase().includes(searchQuery.toLowerCase())
         )) ||
-        recipe.userName.toLowerCase().includes(searchQuery.toLowerCase())
+        (recipe.userName && recipe.userName.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
     const renderRecipeItem = ({ item }) => (
@@ -180,7 +210,7 @@ export default function PublicRecipesScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
                 </View>
-                <Text style={styles.recipeAuthor}>by {item.userName}</Text>
+                <Text style={styles.recipeAuthor}>by {item.userName || 'Anonymous'}</Text>
             </View>
             
             {item.description && (
@@ -301,14 +331,20 @@ export default function PublicRecipesScreen({ navigation }) {
                         <Text style={styles.emptyStateSubtext}>
                             {searchQuery ? 'Try a different search term' : 'Be the first to share a recipe with the community'}
                         </Text>
-                        {!searchQuery && (
+                        <View style={{ gap: 12, marginTop: 20 }}>
                             <TouchableOpacity 
                                 style={styles.addRecipeButton}
                                 onPress={() => navigation.navigate('AddRecipe')}
                             >
                                 <Text style={styles.addRecipeButtonText}>+ Create Recipe</Text>
                             </TouchableOpacity>
-                        )}
+                            <TouchableOpacity 
+                                style={[styles.addRecipeButton, { backgroundColor: '#28a745' }]}
+                                onPress={createTestPublicRecipe}
+                            >
+                                <Text style={styles.addRecipeButtonText}>🧪 Create Test Public Recipe</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 ) : (
                     <FlatList

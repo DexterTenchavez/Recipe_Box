@@ -11,7 +11,9 @@ import {
     ScrollView,
     Modal,
     RefreshControl,
-    FlatList
+    FlatList,
+    KeyboardAvoidingView,
+    Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,13 +29,11 @@ export default function HomeScreen({ navigation }) {
     const [user, setUser] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('myRecipes');
-    
     const [showUserShareModal, setShowUserShareModal] = useState(false);
     const [selectedRecipe, setSelectedRecipe] = useState(null);
     const [shareEmail, setShareEmail] = useState('');
     const [shareMessage, setShareMessage] = useState('');
     const [allUsers, setAllUsers] = useState([]);
-    const [searchUserQuery, setSearchUserQuery] = useState('');
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -133,29 +133,6 @@ Shared from Recipe Book App 🍳
             setShowUserShareModal(false);
             setShareEmail('');
             setShareMessage('');
-            setSearchUserQuery('');
-            
-        } catch (error) {
-            Alert.alert('Error', error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const shareWithSelectedUser = async (userEmail) => {
-        try {
-            setLoading(true);
-            await FirebaseService.shareRecipeWithUser(
-                selectedRecipe.id, 
-                userEmail,
-                shareMessage.trim() || `Check out this recipe: ${selectedRecipe.title}`
-            );
-            
-            Alert.alert('Success', `Recipe shared with ${userEmail}`);
-            setShowUserShareModal(false);
-            setShareEmail('');
-            setShareMessage('');
-            setSearchUserQuery('');
             
         } catch (error) {
             Alert.alert('Error', error.message);
@@ -315,11 +292,6 @@ Shared from Recipe Book App 🍳
         );
     };
 
-    const filteredUsers = allUsers.filter(user =>
-        user.email.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-        (user.name && user.name.toLowerCase().includes(searchUserQuery.toLowerCase()))
-    );
-
     const getEmptyStateMessage = () => {
         switch (activeTab) {
             case 'myRecipes':
@@ -394,7 +366,7 @@ Shared from Recipe Book App 🍳
                                     onPress={() => handleShareRecipe(item)}
                                 >
                                     <Text style={styles.shareButtonText}>
-                                        {item.isShared ? 'Published' : 'Publish'}
+                                        {item.isShared ? '🌍 Public' : '🌐Public'}
                                     </Text>
                                 </TouchableOpacity> 
                             )}
@@ -418,17 +390,17 @@ Shared from Recipe Book App 🍳
                 </View>
                 {isPinned && (
                     <View style={styles.pinnedBadge}>
-                        <Text style={styles.pinnedBadgeText}>Pinned</Text>
+                        <Text style={styles.pinnedBadgeText}>📌 Pinned</Text>
                     </View>
                 )}
                 {isShared && (
                     <View style={styles.sharedBadge}>
-                        <Text style={styles.sharedBadgeText}>Shared</Text>
+                        <Text style={styles.sharedBadgeText}>🎁 Shared</Text>
                     </View>
                 )}
                 {!isPinned && !isShared && item.isShared && (
                     <View style={styles.publicBadge}>
-                        <Text style={styles.publicBadgeText}>Public</Text>
+                        <Text style={styles.publicBadgeText}>🌍 Public</Text>
                     </View>
                 )}
             </View>
@@ -449,19 +421,6 @@ Shared from Recipe Book App 🍳
                  item.sharedAt?.toLocaleDateString() || 
                  'Unknown'}
             </Text>
-        </TouchableOpacity>
-    );
-
-    const renderUserItem = ({ item }) => (
-        <TouchableOpacity
-            style={styles.userItem}
-            onPress={() => shareWithSelectedUser(item.email)}
-        >
-            <View style={styles.userInfo}>
-                <Text style={styles.userName}>{item.name || 'User'}</Text>
-                <Text style={styles.userEmail}>{item.email}</Text>
-            </View>
-            <Text style={styles.shareArrow}>→</Text>
         </TouchableOpacity>
     );
 
@@ -529,16 +488,11 @@ Shared from Recipe Book App 🍳
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.userInfo}>
-                    <Text style={styles.welcomeText}>Welcome back! 👋</Text>
+                    <Text style={styles.welcomeText}>Welcome ! To the Recipe Box</Text>
                     <Text style={styles.userName}>{user?.name}</Text>
                 </View>
                 <View style={styles.headerButtons}>
-                    <TouchableOpacity 
-                        style={styles.fixDataButton}
-                        onPress={handleFixData}
-                    >
-                        <Text style={styles.fixDataButtonText}>🔧</Text>
-                    </TouchableOpacity>
+                   
                     <TouchableOpacity 
                         style={styles.publicRecipesButton}
                         onPress={() => navigation.navigate('PublicRecipes')}
@@ -615,70 +569,56 @@ Shared from Recipe Book App 🍳
                 transparent={true}
                 onRequestClose={() => setShowUserShareModal(false)}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Share Recipe</Text>
-                        <Text style={styles.recipeName}>{selectedRecipe?.title}</Text>
-                        
-                        <Text style={styles.modalLabel}>Share with user:</Text>
-                        
-                        <TextInput
-                            style={styles.modalSearchInput}
-                            placeholder="Search users by name or email..."
-                            value={searchUserQuery}
-                            onChangeText={setSearchUserQuery}
-                            placeholderTextColor="#999"
-                        />
-                        
-                        <View style={styles.userListContainer}>
-                            <FlatList
-                                data={filteredUsers}
-                                renderItem={renderUserItem}
-                                keyExtractor={item => item.uid}
-                                showsVerticalScrollIndicator={false}
-                                style={styles.userList}
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.modalContainer}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Share Recipe</Text>
+                            <Text style={styles.recipeName}>{selectedRecipe?.title}</Text>
+                            
+                            <Text style={styles.modalLabel}>Enter user email:</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Enter user email"
+                                value={shareEmail}
+                                onChangeText={setShareEmail}
+                                placeholderTextColor="#999"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
                             />
-                        </View>
-
-                        <Text style={styles.modalLabel}>Or enter email manually:</Text>
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder="Enter user email"
-                            value={shareEmail}
-                            onChangeText={setShareEmail}
-                            placeholderTextColor="#999"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                        />
-                        
-                        <TextInput
-                            style={[styles.textInput, styles.messageInput]}
-                            placeholder="Add a message (optional)"
-                            value={shareMessage}
-                            onChangeText={setShareMessage}
-                            placeholderTextColor="#999"
-                            multiline
-                        />
-                        
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={() => setShowUserShareModal(false)}
-                            >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.modalButton, styles.shareButton]}
-                                onPress={shareWithUser}
-                                disabled={loading}
-                            >
-                                <Text style={styles.shareButtonText}>
-                                    {loading ? 'Sharing...' : 'Share'}
-                                </Text>
-                            </TouchableOpacity>
+                            
+                            <Text style={styles.modalLabel}>Message (optional):</Text>
+                            <TextInput
+                                style={[styles.textInput, styles.messageInput]}
+                                placeholder="Add a message..."
+                                value={shareMessage}
+                                onChangeText={setShareMessage}
+                                placeholderTextColor="#999"
+                                multiline
+                            />
+                            
+                            <View style={styles.modalButtons}>
+                                <TouchableOpacity 
+                                    style={[styles.modalButton, styles.cancelButton]}
+                                    onPress={() => setShowUserShareModal(false)}
+                                >
+                                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={[styles.modalButton, styles.shareButton, (!shareEmail.trim() || loading) && styles.disabledButton]}
+                                    onPress={shareWithUser}
+                                    disabled={!shareEmail.trim() || loading}
+                                >
+                                    <Text style={styles.shareButtonText}>
+                                        {loading ? 'Sharing...' : 'Share Recipe'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
     );
@@ -872,11 +812,11 @@ const styles = StyleSheet.create({
     shareButton: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 12,
+        borderRadius: 20,
         backgroundColor: '#FF6B35',
     },
     sharedButton: {
-        backgroundColor: '#6c757d',
+        backgroundColor: '#28a745',
     },
     shareButtonText: {
         color: '#FFFFFF',
@@ -937,36 +877,42 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     pinnedBadge: {
-        backgroundColor: '#ffc107',
+        backgroundColor: '#fff3cd',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#ffc107',
     },
     pinnedBadgeText: {
         fontSize: 10,
-        color: '#212529',
+        color: '#856404',
         fontWeight: '600',
     },
     sharedBadge: {
-        backgroundColor: '#28a745',
+        backgroundColor: '#d4edda',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#28a745',
     },
     sharedBadgeText: {
         fontSize: 10,
-        color: '#FFFFFF',
+        color: '#155724',
         fontWeight: '600',
     },
     publicBadge: {
-        backgroundColor: '#FF6B35',
+        backgroundColor: '#d1ecf1',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#17a2b8',
     },
     publicBadgeText: {
         fontSize: 10,
-        color: '#FFFFFF',
+        color: '#0c5460',
         fontWeight: '600',
     },
     recipeAuthor: {
@@ -1042,6 +988,9 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
     },
+    modalContainer: {
+        flex: 1,
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1077,16 +1026,6 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         marginTop: 16,
     },
-    modalSearchInput: {
-        backgroundColor: '#f8f9fa',
-        borderWidth: 1,
-        borderColor: '#e9ecef',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        color: '#2D2D2D',
-        marginBottom: 12,
-    },
     textInput: {
         backgroundColor: '#f8f9fa',
         borderWidth: 1,
@@ -1100,42 +1039,6 @@ const styles = StyleSheet.create({
     messageInput: {
         height: 80,
         textAlignVertical: 'top',
-    },
-    userListContainer: {
-        maxHeight: 200,
-        marginBottom: 16,
-    },
-    userList: {
-        flex: 1,
-    },
-    userItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 12,
-        backgroundColor: '#f8f9fa',
-        borderRadius: 8,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
-    },
-    userInfo: {
-        flex: 1,
-    },
-    userName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#2D2D2D',
-        marginBottom: 2,
-    },
-    userEmail: {
-        fontSize: 12,
-        color: '#6c757d',
-    },
-    shareArrow: {
-        fontSize: 18,
-        color: '#FF6B35',
-        fontWeight: 'bold',
     },
     modalButtons: {
         flexDirection: 'row',
@@ -1161,6 +1064,10 @@ const styles = StyleSheet.create({
     },
     shareButton: {
         backgroundColor: '#FF6B35',
+    },
+    disabledButton: {
+        backgroundColor: '#ccc',
+        opacity: 0.6,
     },
     shareButtonText: {
         color: '#FFFFFF',

@@ -27,6 +27,7 @@ export default function AddRecipeScreen({ navigation }) {
     const [instructions, setInstructions] = useState(['']);
     const [tags, setTags] = useState([]);
     const [newTag, setNewTag] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const addIngredient = () => {
         setIngredients([...ingredients, '']);
@@ -55,6 +56,7 @@ export default function AddRecipeScreen({ navigation }) {
         setInstructions(newInstructions);
     };
 
+    
     const removeInstruction = (index) => {
         if (instructions.length > 1) {
             const newInstructions = instructions.filter((_, i) => i !== index);
@@ -69,64 +71,93 @@ export default function AddRecipeScreen({ navigation }) {
         }
     };
 
+
+    // Add this temporary test in your component
+useEffect(() => {
+    console.log("AddRecipeScreen mounted - checking FirebaseService");
+}, []);
+
     const removeTag = (index) => {
         const newTags = tags.filter((_, i) => i !== index);
         setTags(newTags);
     };
 
-    const handleSaveRecipe = async () => {
-        if (!title.trim()) {
-            Alert.alert('Error', 'Please enter a recipe title');
-            return;
-        }
-
-        const filteredIngredients = ingredients.filter(ing => ing.trim());
-        const filteredInstructions = instructions.filter(inst => inst.trim());
-
-        if (filteredIngredients.length === 0) {
-            Alert.alert('Error', 'Please add at least one ingredient');
-            return;
-        }
-
-        if (filteredInstructions.length === 0) {
-            Alert.alert('Error', 'Please add at least one instruction');
-            return;
-        }
-
-        try {
-            const recipeData = {
-                title: title.trim(),
-                description: description.trim(),
-                prepTime: parseInt(prepTime) || 0,
-                cookTime: parseInt(cookTime) || 0,
-                servings: parseInt(servings) || 1,
-                ingredients: filteredIngredients,
-                instructions: filteredInstructions,
-                tags: tags,
-                createdAt: new Date(),
-                totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0)
-            };
-
-            await FirebaseService.addRecipe(recipeData);
-            Alert.alert('Success', 'Recipe added successfully!');
-            navigation.goBack();
-        } catch (error) {
-            Alert.alert('Error', 'Failed to save recipe: ' + error.message);
-        }
-    };
-    
-    useEffect(() => {
-  async function testConnection() {
-    try {
-      console.log("🔥 Testing Firestore connection...");
-      const querySnapshot = await getDocs(collection(db, "test"));
-      console.log("✅ Firestore is working!");
-    } catch (err) {
-      console.error("❌ Firestore connection failed:", err);
+ const handleSaveRecipe = async () => {
+    // Validation checks
+    if (!title.trim()) {
+        Alert.alert('Error', 'Please enter a recipe title');
+        return;
     }
-  }
-  testConnection();
-}, []);
+
+    const filteredIngredients = ingredients.filter(ing => ing.trim());
+    const filteredInstructions = instructions.filter(inst => inst.trim());
+
+    if (filteredIngredients.length === 0) {
+        Alert.alert('Error', 'Please add at least one ingredient');
+        return;
+    }
+
+    if (filteredInstructions.length === 0) {
+        Alert.alert('Error', 'Please add at least one instruction');
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const recipeData = {
+            title: title.trim(),
+            description: description.trim(),
+            prepTime: parseInt(prepTime) || 0,
+            cookTime: parseInt(cookTime) || 0,
+            servings: parseInt(servings) || 1,
+            ingredients: filteredIngredients,
+            instructions: filteredInstructions,
+            tags: tags,
+            totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
+            // Note: FirebaseService.addRecipe should add userId, createdAt, etc.
+        };
+
+        console.log('📝 Saving recipe:', recipeData.title);
+        await FirebaseService.addRecipe(recipeData);
+
+        Alert.alert(
+            'Success 🎉', 
+            'Recipe added successfully!',
+            [{ 
+                text: 'OK', 
+                onPress: () => {
+                    // Reset form and navigate back
+                    setTitle('');
+                    setDescription('');
+                    setPrepTime('');
+                    setCookTime('');
+                    setServings('');
+                    setIngredients(['']);
+                    setInstructions(['']);
+                    setTags([]);
+                    navigation.goBack();
+                }
+            }]
+        );
+    } catch (error) {
+        console.error('❌ Error saving recipe:', error);
+        let errorMessage = 'Failed to save recipe. Please try again.';
+        
+        if (error.message.includes('permission')) {
+            errorMessage = 'Permission denied. Please check if you are logged in.';
+        } else if (error.message.includes('network') || error.message.includes('offline')) {
+            errorMessage = 'Network error. Please check your internet connection.';
+        } else if (error.message.includes('quota')) {
+            errorMessage = 'Storage limit exceeded. Please try again later.';
+        }
+        
+        Alert.alert('Error', errorMessage);
+    } finally {
+        setLoading(false);
+    }
+};
+    
+   
 
     return (
         <SafeAreaView style={styles.container}>

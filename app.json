@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "Recipe-Book",
+    "name": "Recipe Box",
     "slug": "Recipe-Book",
     "owner": "dextertenchavez",
     "scheme": "recipebook",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/pic-logo.jpeg",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/pic-logo.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,14 +20,14 @@
     "android": {
       "package": "com.dextertenchavez.RecipeBook",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/pic-logo.jpeg.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/pic-logo.jpeg"
     },
     "plugins": [
       "expo-web-browser"
