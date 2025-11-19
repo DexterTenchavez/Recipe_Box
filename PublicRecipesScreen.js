@@ -264,7 +264,7 @@ export default function PublicRecipesScreen({ navigation }) {
                 >
                     <Text style={styles.backButtonText}>← Back</Text>
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Community Recipes</Text>
+                <Text style={styles.headerTitle}>🌍Community Recipes</Text>
                 <View style={styles.headerActions}>
                     {speakingRecipeId && (
                         <TouchableOpacity 

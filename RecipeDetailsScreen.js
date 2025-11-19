@@ -65,6 +65,34 @@ export default function RecipeDetailScreen({ route, navigation }) {
         await speakNextPart();
     };
 
+    const speakTitle = async () => {
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        const titlePart = recipeParts.find(part => part.type === 'title');
+        if (titlePart) {
+            speechQueue.current = [titlePart];
+            currentIndex.current = 0;
+            await speakNextPart();
+        }
+    };
+
+    const speakDescription = async () => {
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        const descriptionPart = recipeParts.find(part => part.type === 'description');
+        if (descriptionPart) {
+            speechQueue.current = [descriptionPart];
+            currentIndex.current = 0;
+            await speakNextPart();
+        }
+    };
+
     const speakIngredients = async () => {
         if (isSpeakingRef.current) {
             await stopSpeaking();
@@ -242,9 +270,20 @@ Shared from Recipe Book App 🍳
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.header}>
                     <View style={styles.headerTop}>
-                        <HighlightableText section="title">
-                            <Text style={styles.title}>{recipe.title}</Text>
-                        </HighlightableText>
+                        <View style={styles.titleContainer}>
+                            <HighlightableText section="title">
+                                <View style={styles.titleRow}>
+                                    <TouchableOpacity 
+                                        style={styles.titleVoiceButton}
+                                        onPress={speakTitle}
+                                        disabled={isSpeaking}
+                                    >
+                                        <Text style={styles.titleVoiceIcon}>🔈</Text>
+                                    </TouchableOpacity>
+                                    <Text style={styles.title}>{recipe.title}</Text>
+                                </View>
+                            </HighlightableText>
+                        </View>
                         
                         <View style={styles.actionButtons}>
                             {isSpeaking ? (
@@ -277,7 +316,7 @@ Shared from Recipe Book App 🍳
                                         style={styles.shareButton}
                                         onPress={handleShareRecipe}
                                     >
-                                        <Text style={styles.shareButtonText}>Share</Text>
+                                        <Text style={styles.shareButtonText}>➢</Text>
                                     </TouchableOpacity>
                                     
                                     {currentUser?.uid === recipe.userId && (
@@ -285,7 +324,7 @@ Shared from Recipe Book App 🍳
                                             style={styles.deleteButton}
                                             onPress={handleDeleteRecipe}
                                         >
-                                            <Text style={styles.deleteButtonText}>Delete</Text>
+                                            <Text style={styles.deleteButtonText}>🗑</Text>
                                         </TouchableOpacity>
                                     )}
                                 </>
@@ -294,10 +333,19 @@ Shared from Recipe Book App 🍳
                     </View>
                     
                     {recipe.description && (
-                        <HighlightableText 
-                            text={recipe.description} 
-                            section="description" 
-                        />
+                        <View style={styles.descriptionContainer}>
+                            <HighlightableText 
+                                text={recipe.description} 
+                                section="description" 
+                            />
+                            <TouchableOpacity 
+                                style={styles.descriptionVoiceButton}
+                                onPress={speakDescription}
+                                disabled={isSpeaking}
+                            >
+                                <Text style={styles.descriptionVoiceIcon}>🔈</Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
                     
                     <HighlightableText section="times">
@@ -413,12 +461,45 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         marginBottom: 16,
     },
+    titleContainer: {
+        flex: 1,
+        marginRight: 16,
+    },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
     title: {
         fontSize: 28,
         fontWeight: 'bold',
         color: '#2D2D2D',
         flex: 1,
-        marginRight: 16,
+    },
+    titleVoiceButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#FFF8F5',
+        marginRight: 12,
+    },
+    titleVoiceIcon: {
+        fontSize: 16,
+        color: '#FF6B35',
+    },
+    descriptionContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 16,
+    },
+    descriptionVoiceButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#FFF8F5',
+        marginLeft: 12,
+    },
+    descriptionVoiceIcon: {
+        fontSize: 16,
+        color: '#FF6B35',
     },
     actionButtons: {
         flexDirection: 'row',

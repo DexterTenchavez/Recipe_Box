@@ -8,12 +8,12 @@ import {
     Share,
     ActivityIndicator,
     TextInput,
-    ScrollView,
+    FlatList,
     Modal,
     RefreshControl,
-    FlatList,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -218,14 +218,14 @@ Shared from Recipe Book App 🍳
         try {
             if (recipe.isShared) {
                 await FirebaseService.unshareRecipe(recipe.id);
-                Alert.alert('Success', 'Recipe unshared successfully!');
+                Alert.alert('Success', 'Recipe unpublished successfully!');
             } else {
                 await FirebaseService.shareRecipe(recipe.id);
-                Alert.alert('Success', 'Recipe shared publicly!');
+                Alert.alert('Success', 'Recipe published!');
             }
             loadRecipes();
         } catch (error) {
-            Alert.alert('Error', 'Failed to update recipe sharing: ' + error.message);
+            Alert.alert('Error', 'Failed to update recipe publishing: ' + error.message);
         }
     };
 
@@ -355,18 +355,14 @@ Shared from Recipe Book App 🍳
                                 style={styles.quickShareButton}
                                 onPress={() => handleQuickShare(item)}
                             >
-                                <Text style={styles.quickShareButtonText}>↗</Text>
+                                <Text style={styles.quickShareButtonText}>➢</Text>
                             </TouchableOpacity>
                             {user?.uid === item.userId && (
                                 <TouchableOpacity 
-                                    style={[
-                                        styles.shareButton, 
-                                        item.isShared && styles.sharedButton
-                                    ]}
                                     onPress={() => handleShareRecipe(item)}
                                 >
-                                    <Text style={styles.shareButtonText}>
-                                        {item.isShared ? '🌍 Public' : '🌐Public'}
+                                    <Text style={item.isShared ? styles.publishedButtonText : styles.shareButtonText}>
+                                        {item.isShared ? '🌍 Published' : '🌍 Publish'}
                                     </Text>
                                 </TouchableOpacity> 
                             )}
@@ -400,7 +396,7 @@ Shared from Recipe Book App 🍳
                 )}
                 {!isPinned && !isShared && item.isShared && (
                     <View style={styles.publicBadge}>
-                        <Text style={styles.publicBadgeText}>🌍 Public</Text>
+                        <Text style={styles.publicBadgeText}>🌍 Published</Text>
                     </View>
                 )}
             </View>
@@ -492,7 +488,6 @@ Shared from Recipe Book App 🍳
                     <Text style={styles.userName}>{user?.name}</Text>
                 </View>
                 <View style={styles.headerButtons}>
-                   
                     <TouchableOpacity 
                         style={styles.publicRecipesButton}
                         onPress={() => navigation.navigate('PublicRecipes')}
@@ -574,49 +569,55 @@ Shared from Recipe Book App 🍳
                     style={styles.modalContainer}
                 >
                     <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Share Recipe</Text>
-                            <Text style={styles.recipeName}>{selectedRecipe?.title}</Text>
-                            
-                            <Text style={styles.modalLabel}>Enter user email:</Text>
-                            <TextInput
-                                style={styles.textInput}
-                                placeholder="Enter user email"
-                                value={shareEmail}
-                                onChangeText={setShareEmail}
-                                placeholderTextColor="#999"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
-                            
-                            <Text style={styles.modalLabel}>Message (optional):</Text>
-                            <TextInput
-                                style={[styles.textInput, styles.messageInput]}
-                                placeholder="Add a message..."
-                                value={shareMessage}
-                                onChangeText={setShareMessage}
-                                placeholderTextColor="#999"
-                                multiline
-                            />
-                            
-                            <View style={styles.modalButtons}>
-                                <TouchableOpacity 
-                                    style={[styles.modalButton, styles.cancelButton]}
-                                    onPress={() => setShowUserShareModal(false)}
-                                >
-                                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={[styles.modalButton, styles.shareButton, (!shareEmail.trim() || loading) && styles.disabledButton]}
-                                    onPress={shareWithUser}
-                                    disabled={!shareEmail.trim() || loading}
-                                >
-                                    <Text style={styles.shareButtonText}>
-                                        {loading ? 'Sharing...' : 'Share Recipe'}
-                                    </Text>
-                                </TouchableOpacity>
+                        <ScrollView 
+                            style={styles.modalScrollView}
+                            contentContainerStyle={styles.modalScrollContent}
+                            showsVerticalScrollIndicator={false}
+                        >
+                            <View style={styles.modalContent}>
+                                <Text style={styles.modalTitle}>Share Recipe</Text>
+                                <Text style={styles.recipeName}>{selectedRecipe?.title}</Text>
+                                
+                                <Text style={styles.modalLabel}>Enter user email:</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Enter user email"
+                                    value={shareEmail}
+                                    onChangeText={setShareEmail}
+                                    placeholderTextColor="#999"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                />
+                                
+                                <Text style={styles.modalLabel}>Message (optional):</Text>
+                                <TextInput
+                                    style={[styles.textInput, styles.messageInput]}
+                                    placeholder="Add a message..."
+                                    value={shareMessage}
+                                    onChangeText={setShareMessage}
+                                    placeholderTextColor="#999"
+                                    multiline
+                                />
+                                
+                                <View style={styles.modalButtons}>
+                                    <TouchableOpacity 
+                                        style={[styles.modalButton, styles.cancelButton]}
+                                        onPress={() => setShowUserShareModal(false)}
+                                    >
+                                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.modalButton, styles.shareButton, (!shareEmail.trim() || loading) && styles.disabledButton]}
+                                        onPress={shareWithUser}
+                                        disabled={!shareEmail.trim() || loading}
+                                    >
+                                        <Text style={styles.shareButtonText}>
+                                            {loading ? 'Sharing...' : 'Share Recipe'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
+                        </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
@@ -627,7 +628,7 @@ Shared from Recipe Book App 🍳
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#FFFFFF',
     },
     header: {
         flexDirection: 'row',
@@ -655,16 +656,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-    },
-    fixDataButton: {
-        backgroundColor: '#fd7e14',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderRadius: 12,
-    },
-    fixDataButtonText: {
-        fontSize: 16,
-        color: '#FFFFFF',
     },
     publicRecipesButton: {
         backgroundColor: '#FF6B35',
@@ -809,17 +800,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
-    shareButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#FF6B35',
-    },
-    sharedButton: {
-        backgroundColor: '#28a745',
-    },
     shareButtonText: {
-        color: '#FFFFFF',
+        color: '#FF6B35',
         fontSize: 12,
         fontWeight: '600',
     },
@@ -998,12 +980,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
     },
+    modalScrollView: {
+        width: '100%',
+        maxHeight: '80%',
+    },
+    modalScrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+    },
     modalContent: {
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
         padding: 24,
         width: '100%',
-        maxHeight: '80%',
     },
     modalTitle: {
         fontSize: 20,
@@ -1069,9 +1058,28 @@ const styles = StyleSheet.create({
         backgroundColor: '#ccc',
         opacity: 0.6,
     },
-    shareButtonText: {
-        color: '#FFFFFF',
-        fontWeight: '600',
-        fontSize: 16,
-    },
+  shareButtonText: {
+    color: '#f7f2f2ff',
+    fontWeight: '600',
+    fontSize: 16,
+     fontWeight: '600',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#28a745',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#28a745',
+},
+publishedButtonText: {
+    color: '#f4f8f5ff',
+    fontWeight: '600',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#28a745',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#3383d2ff',
+},
 });

@@ -20,7 +20,7 @@
     "android": {
       "package": "com.dextertenchavez.RecipeBook",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/pic-logo.jpeg.png",
+        "foregroundImage": "./assets/pic-logo.jpeg",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
