@@ -1059,17 +1059,12 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
   shareButtonText: {
-    color: '#f7f2f2ff',
+    color: '#6c757d',
     fontWeight: '600',
     fontSize: 16,
      fontWeight: '600',
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#28a745',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#28a745',
+    
 },
 publishedButtonText: {
     color: '#f4f8f5ff',
