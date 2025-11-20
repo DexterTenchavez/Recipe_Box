@@ -449,10 +449,9 @@ Shared from Recipe Book App 🍳
                     
                     {recipe.description && (
                         <View style={styles.descriptionContainer}>
-                            <HighlightableText 
-                                text={recipe.description} 
-                                section="description" 
-                            />
+                            <HighlightableText section="description">
+                                <Text style={styles.descriptionText}>{recipe.description}</Text>
+                            </HighlightableText>
                             <TouchableOpacity 
                                 style={styles.descriptionVoiceButton}
                                 onPress={speakDescription}
@@ -626,11 +625,18 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
         marginBottom: 16,
     },
+    descriptionText: {
+        fontSize: 16,
+        color: '#666666',
+        lineHeight: 24,
+        flex: 1,
+        marginRight: 12,
+    },
     descriptionVoiceButton: {
         padding: 8,
         borderRadius: 8,
         backgroundColor: '#FFF8F5',
-        marginLeft: 12,
+        alignSelf: 'flex-start',
     },
     descriptionVoiceIcon: {
         fontSize: 16,
@@ -698,7 +704,6 @@ const styles = StyleSheet.create({
         color: '#2D2D2D',
         fontWeight: '600',
     },
-    // New style for highlighted items
     highlightedItemContainer: {
         backgroundColor: '#FFF0EB',
         borderRadius: 8,
@@ -831,7 +836,6 @@ const styles = StyleSheet.create({
         color: '#2D2D2D',
         lineHeight: 24,
     },
-    // New styles for individual item voice buttons
     itemVoiceButton: {
         padding: 6,
         borderRadius: 6,
