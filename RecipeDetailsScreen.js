@@ -21,6 +21,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
     const [isPaused, setIsPaused] = useState(false);
     const [currentSpeakingPart, setCurrentSpeakingPart] = useState('');
     const [speechProgress, setSpeechProgress] = useState(0);
+    const [speakingItemIndex, setSpeakingItemIndex] = useState(null);
     
     const speechQueue = useRef([]);
     const currentIndex = useRef(0);
@@ -121,12 +122,109 @@ export default function RecipeDetailScreen({ route, navigation }) {
         }
     };
 
+    // New function to speak individual ingredient
+    const speakIngredient = async (ingredient, index) => {
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        setCurrentSpeakingPart('ingredient-item');
+        setSpeakingItemIndex(index);
+
+        try {
+            setIsSpeaking(true);
+            isSpeakingRef.current = true;
+            setIsPaused(false);
+
+            await Speech.speak(`Ingredient ${index + 1}: ${ingredient}`, {
+                language: 'en',
+                pitch: 1.0,
+                rate: 0.8,
+                onDone: () => {
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
+                },
+                onStopped: () => {
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
+                },
+                onError: (error) => {
+                    Alert.alert('Speech Error', 'Could not speak the ingredient');
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
+                }
+            });
+        } catch (error) {
+            Alert.alert('Speech Error', 'Could not speak the ingredient');
+            setIsSpeaking(false);
+            isSpeakingRef.current = false;
+            setCurrentSpeakingPart('');
+            setSpeakingItemIndex(null);
+        }
+    };
+
+    // New function to speak individual instruction
+    const speakInstruction = async (instruction, index) => {
+        if (isSpeakingRef.current) {
+            await stopSpeaking();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        setCurrentSpeakingPart('instruction-item');
+        setSpeakingItemIndex(index);
+
+        try {
+            setIsSpeaking(true);
+            isSpeakingRef.current = true;
+            setIsPaused(false);
+
+            await Speech.speak(`Step ${index + 1}: ${instruction}`, {
+                language: 'en',
+                pitch: 1.0,
+                rate: 0.8,
+                onDone: () => {
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
+                },
+                onStopped: () => {
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
+                },
+                onError: (error) => {
+                    Alert.alert('Speech Error', 'Could not speak the instruction');
+                    setIsSpeaking(false);
+                    isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
+                }
+            });
+        } catch (error) {
+            Alert.alert('Speech Error', 'Could not speak the instruction');
+            setIsSpeaking(false);
+            isSpeakingRef.current = false;
+            setCurrentSpeakingPart('');
+            setSpeakingItemIndex(null);
+        }
+    };
+
     const speakNextPart = async () => {
         if (currentIndex.current >= speechQueue.current.length) {
             setIsSpeaking(false);
             isSpeakingRef.current = false;
             setCurrentSpeakingPart('');
             setSpeechProgress(0);
+            setSpeakingItemIndex(null);
             return;
         }
 
@@ -151,17 +249,22 @@ export default function RecipeDetailScreen({ route, navigation }) {
                     setIsSpeaking(false);
                     isSpeakingRef.current = false;
                     setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
                 },
                 onError: (error) => {
                     Alert.alert('Speech Error', 'Could not speak the text');
                     setIsSpeaking(false);
                     isSpeakingRef.current = false;
+                    setCurrentSpeakingPart('');
+                    setSpeakingItemIndex(null);
                 }
             });
         } catch (error) {
             Alert.alert('Speech Error', 'Could not speak the text');
             setIsSpeaking(false);
             isSpeakingRef.current = false;
+            setCurrentSpeakingPart('');
+            setSpeakingItemIndex(null);
         }
     };
 
@@ -191,6 +294,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
             setIsPaused(false);
             setCurrentSpeakingPart('');
             setSpeechProgress(0);
+            setSpeakingItemIndex(null);
             speechQueue.current = [];
             currentIndex.current = 0;
         } catch (error) {
@@ -210,6 +314,17 @@ export default function RecipeDetailScreen({ route, navigation }) {
         return (
             <View style={isHighlighted ? styles.highlightedContainer : null}>
                 {children || <Text style={[styles.normalText, isHighlighted && styles.highlightedText]}>{text}</Text>}
+            </View>
+        );
+    };
+
+    // New component for highlightable items
+    const HighlightableItem = ({ section, index, children }) => {
+        const isHighlighted = currentSpeakingPart === section && speakingItemIndex === index;
+        
+        return (
+            <View style={isHighlighted ? styles.highlightedItemContainer : null}>
+                {children}
             </View>
         );
     };
@@ -381,6 +496,8 @@ Shared from Recipe Book App 🍳
                                 {currentSpeakingPart === 'times' && 'Speaking: Cooking Times'}
                                 {currentSpeakingPart === 'ingredients' && 'Speaking: Ingredients'}
                                 {currentSpeakingPart === 'instructions' && 'Speaking: Instructions'}
+                                {currentSpeakingPart === 'ingredient-item' && `Speaking: Ingredient ${speakingItemIndex + 1}`}
+                                {currentSpeakingPart === 'instruction-item' && `Speaking: Step ${speakingItemIndex + 1}`}
                                 {isPaused && ' (Paused)'}
                             </Text>
                         </View>
@@ -402,10 +519,19 @@ Shared from Recipe Book App 🍳
                     
                     <HighlightableText section="ingredients">
                         {recipe.ingredients.map((ingredient, index) => (
-                            <View key={index} style={styles.ingredientItem}>
-                                <Text style={styles.ingredientBullet}>•</Text>
-                                <Text style={styles.ingredient}>{ingredient}</Text>
-                            </View>
+                            <HighlightableItem key={index} section="ingredient-item" index={index}>
+                                <View style={styles.ingredientItem}>
+                                    <Text style={styles.ingredientBullet}>•</Text>
+                                    <Text style={styles.ingredient}>{ingredient}</Text>
+                                    <TouchableOpacity 
+                                        style={styles.itemVoiceButton}
+                                        onPress={() => speakIngredient(ingredient, index)}
+                                        disabled={isSpeaking}
+                                    >
+                                        <Text style={styles.itemVoiceIcon}>🔊</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </HighlightableItem>
                         ))}
                     </HighlightableText>
                 </View>
@@ -425,14 +551,23 @@ Shared from Recipe Book App 🍳
                     
                     <HighlightableText section="instructions">
                         {recipe.instructions.map((instruction, index) => (
-                            <View key={index} style={styles.instructionStep}>
-                                <View style={styles.stepNumberContainer}>
-                                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                            <HighlightableItem key={index} section="instruction-item" index={index}>
+                                <View style={styles.instructionStep}>
+                                    <View style={styles.stepNumberContainer}>
+                                        <Text style={styles.stepNumber}>{index + 1}</Text>
+                                    </View>
+                                    <View style={styles.instructionTextContainer}>
+                                        <Text style={styles.instructionText}>{instruction}</Text>
+                                    </View>
+                                    <TouchableOpacity 
+                                        style={styles.itemVoiceButton}
+                                        onPress={() => speakInstruction(instruction, index)}
+                                        disabled={isSpeaking}
+                                    >
+                                        <Text style={styles.itemVoiceIcon}>🔊</Text>
+                                    </TouchableOpacity>
                                 </View>
-                                <View style={styles.instructionTextContainer}>
-                                    <Text style={styles.instructionText}>{instruction}</Text>
-                                </View>
-                            </View>
+                            </HighlightableItem>
                         ))}
                     </HighlightableText>
                 </View>
@@ -563,6 +698,15 @@ const styles = StyleSheet.create({
         color: '#2D2D2D',
         fontWeight: '600',
     },
+    // New style for highlighted items
+    highlightedItemContainer: {
+        backgroundColor: '#FFF0EB',
+        borderRadius: 8,
+        padding: 8,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF6B35',
+        marginVertical: 2,
+    },
     metaInfo: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -686,5 +830,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#2D2D2D',
         lineHeight: 24,
+    },
+    // New styles for individual item voice buttons
+    itemVoiceButton: {
+        padding: 6,
+        borderRadius: 6,
+        backgroundColor: '#FFF8F5',
+        marginLeft: 8,
+    },
+    itemVoiceIcon: {
+        fontSize: 14,
+        color: '#FF6B35',
     },
 });
