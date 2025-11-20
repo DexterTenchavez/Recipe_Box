@@ -2,7 +2,7 @@
   "expo": {
     "name": "Recipe Box",
     "slug": "Recipe-Book",
-    "owner": "jerichogunayan",
+    "owner": "dextertenchavez",
     "scheme": "recipebook",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jerichogunayan.recipebook"
+      "bundleIdentifier": "com.dextertenchavez.recipebook"
     },
     "android": {
-      "package": "com.jerichogunayan.recipebook",
+      "package": "com.dextertenchavez.recipebook",
       "adaptiveIcon": {
         "foregroundImage": "./assets/recipe.png",
         "backgroundColor": "#ffffff"
@@ -33,8 +33,9 @@
       "expo-web-browser"
     ],
     "extra": {
+      "googleWebClientId": "157942699599-miao9gillg9t60cbog343vgtav41kcah.apps.googleusercontent.com",
       "eas": {
-        "projectId": "a9c2d47f-6420-4a91-9fa0-a5811d40397c"
+        "projectId": "acc01607-7779-467c-bef8-16d0249d3504"
       }
     }
   }
