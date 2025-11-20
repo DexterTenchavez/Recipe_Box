@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dextertenchavez.recipebook"
+      "bundleIdentifier": "com.dextertenchavez.RecipeBook"
     },
     "android": {
-      "package": "com.dextertenchavez.recipebook",
+      "package": "com.dextertenchavez.RecipeBook",
       "adaptiveIcon": {
         "foregroundImage": "./assets/recipe.png",
         "backgroundColor": "#ffffff"
