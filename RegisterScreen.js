@@ -59,11 +59,11 @@ export default function RegisterScreen({ navigation }) {
           <View style={styles.header}>
             <View style={styles.logoContainer}>
               {/* Replace with your actual logo */}
-              <Image source={require('./assets/pic-logo.jpeg')} style={styles.logo} />
+              <Image source={require('./assets/recipe.png')} style={styles.logo} />
               {/* If you have your icon-logo.png: */}
               {/* <Image source={require('./assets/icon-logo.png')} style={styles.logo} /> */}
             </View>
-            <Text style={styles.title}>Join Recipe Book</Text>
+            <Text style={styles.title}>Join Recipe Box</Text>
             <Text style={styles.subtitle}>Create your account and start sharing recipes</Text>
           </View>
 

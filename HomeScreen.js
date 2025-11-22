@@ -34,6 +34,7 @@ export default function HomeScreen({ navigation }) {
     const [shareEmail, setShareEmail] = useState('');
     const [shareMessage, setShareMessage] = useState('');
     const [allUsers, setAllUsers] = useState([]);
+    const [showAboutModal, setShowAboutModal] = useState(false);
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -484,7 +485,7 @@ Shared from Recipe Book App 🍳
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.userInfo}>
-                    <Text style={styles.welcomeText}>Welcome ! To the Recipe Box</Text>
+                    <Text style={styles.welcomeText}>Welcome! To the Recipe Box</Text>
                     <Text style={styles.userName}>{user?.name}</Text>
                 </View>
                 <View style={styles.headerButtons}>
@@ -492,7 +493,13 @@ Shared from Recipe Book App 🍳
                         style={styles.publicRecipesButton}
                         onPress={() => navigation.navigate('PublicRecipes')}
                     >
-                        <Text style={styles.publicRecipesButtonText}>Browse</Text>
+                        <Text style={styles.publicRecipesButtonText}>🌍Browse</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.aboutButton}
+                        onPress={() => setShowAboutModal(true)}
+                    >
+                        <Text style={styles.aboutButtonText}>ℹ️</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                         <Text style={styles.logoutButtonText}>Logout</Text>
@@ -558,6 +565,7 @@ Shared from Recipe Book App 🍳
                 </TouchableOpacity>
             )}
 
+            {/* User Share Modal */}
             <Modal
                 visible={showUserShareModal}
                 animationType="slide"
@@ -621,6 +629,50 @@ Shared from Recipe Book App 🍳
                     </View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* About Info Modal */}
+            <Modal
+                visible={showAboutModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowAboutModal(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>About Recipe Book App</Text>
+                            
+                            <View style={styles.aboutSection}>
+                                <Text style={styles.aboutSectionTitle}>👥 Submitted By:</Text>
+                                <View style={styles.membersList}>
+                                    <Text style={styles.memberItem}>• Dexter Tenchavez (Leader)</Text>
+                                    <Text style={styles.memberItem}>• Novy Mapute</Text>
+                                    <Text style={styles.memberItem}>• Ricianin L. Bontog</Text>
+                                    <Text style={styles.memberItem}>• Mark Hundson Montero</Text>
+                                    <Text style={styles.memberItem}>• Junalee Serbon</Text>
+                                    <Text style={styles.memberItem}>• Nino B. Labos</Text>
+                                    <Text style={styles.memberItem}>• Alexandra Lloymie A. Regala</Text>
+                                    <Text style={styles.memberItem}>• Kembirly Autida</Text>
+                                    <Text style={styles.memberItem}>• Ma. Verna Wayway</Text>
+                                    <Text style={styles.memberItem}>• Mary Grace Ramos</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.aboutSection}>
+                                <Text style={styles.aboutSectionTitle}>📝 Submitted To:</Text>
+                                <Text style={styles.instructorText}>Jay Ian Camelotes</Text>
+                            </View>
+
+                            <TouchableOpacity 
+                                style={styles.closeButton}
+                                onPress={() => setShowAboutModal(false)}
+                            >
+                                <Text style={styles.closeButtonText}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -664,6 +716,17 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     publicRecipesButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 12,
+    },
+    aboutButton: {
+        backgroundColor: '#17a2b8',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
+    },
+    aboutButtonText: {
         color: '#FFFFFF',
         fontWeight: '600',
         fontSize: 12,
@@ -993,12 +1056,13 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         padding: 24,
         width: '100%',
+        maxWidth: 400,
     },
     modalTitle: {
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: 'bold',
         color: '#2D2D2D',
-        marginBottom: 8,
+        marginBottom: 16,
         textAlign: 'center',
     },
     recipeName: {
@@ -1058,23 +1122,57 @@ const styles = StyleSheet.create({
         backgroundColor: '#ccc',
         opacity: 0.6,
     },
-  shareButtonText: {
-    color: '#6c757d',
-    fontWeight: '600',
-    fontSize: 16,
-     fontWeight: '600',
-    fontSize: 16,
-    
-},
-publishedButtonText: {
-    color: '#f4f8f5ff',
-    fontWeight: '600',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#28a745',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#3383d2ff',
-},
+    shareButtonText: {
+        color: '#0f0e0eff',
+        fontWeight: '600',
+        fontSize: 16,
+    },
+    publishedButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 12,
+        borderWidth: 1,
+        borderColor: '#28a745',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: '#28a745',
+    },
+    // About Modal Styles
+    aboutSection: {
+        marginBottom: 24,
+    },
+    aboutSectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#2D2D2D',
+        marginBottom: 12,
+    },
+    membersList: {
+        marginLeft: 8,
+    },
+    memberItem: {
+        fontSize: 14,
+        color: '#6c757d',
+        marginBottom: 6,
+        lineHeight: 20,
+    },
+    instructorText: {
+        fontSize: 16,
+        color: '#FF6B35',
+        fontWeight: '600',
+        marginLeft: 8,
+    },
+    closeButton: {
+        backgroundColor: '#FF6B35',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    closeButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 16,
+    },
 });

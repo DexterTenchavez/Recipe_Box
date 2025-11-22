@@ -10,7 +10,8 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
-  Image
+  Image,
+  Modal
 } from 'react-native';
 import { FirebaseService } from './FirebaseService';
 
@@ -19,6 +20,7 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -49,16 +51,26 @@ export default function LoginScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Header with Logo */}
+          {/* Header with Info Button */}
           <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.infoButton}
+              onPress={() => setShowAboutModal(true)}
+            >
+              <Text style={styles.infoButtonText}>ℹ️</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Logo and Title */}
+          <View style={styles.logoSection}>
             <View style={styles.logoContainer}>
               {/* Replace with your actual logo */}
-             <Image source={require('./assets/pic-logo.jpeg')} style={styles.logo} />
+              <Image source={require('./assets/recipe.png')} style={styles.logo} />
               {/* If you have your icon-logo.png: */}
               {/* <Image source={require('./assets/icon-logo.png')} style={styles.logo} /> */}
             </View>
             <Text style={styles.title}>Sign in</Text>
-            <Text style={styles.subtitle}>Sign in to your Recipe Book account</Text>
+            <Text style={styles.subtitle}>Sign in to your Recipe Box account</Text>
           </View>
 
           {/* Form */}
@@ -128,6 +140,50 @@ export default function LoginScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* About Info Modal */}
+      <Modal
+        visible={showAboutModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAboutModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>About Recipe Book App</Text>
+              
+              <View style={styles.aboutSection}>
+                <Text style={styles.aboutSectionTitle}>👥 Submitted By:</Text>
+                <View style={styles.membersList}>
+                  <Text style={styles.memberItem}>• Dexter Tenchavez (Leader)</Text>
+                  <Text style={styles.memberItem}>• Novy Mapute</Text>
+                  <Text style={styles.memberItem}>• Ricianin L. Bontog</Text>
+                  <Text style={styles.memberItem}>• Mark Hundson Montero</Text>
+                  <Text style={styles.memberItem}>• Junalee Serbon</Text>
+                  <Text style={styles.memberItem}>• Nino B. Labos</Text>
+                  <Text style={styles.memberItem}>• Alexandra Lloymie A. Regala</Text>
+                  <Text style={styles.memberItem}>• Kembirly Autida</Text>
+                  <Text style={styles.memberItem}>• Ma. Verna Wayway</Text>
+                  <Text style={styles.memberItem}>• Mary Grace Ramos</Text>
+                </View>
+              </View>
+
+              <View style={styles.aboutSection}>
+                <Text style={styles.aboutSectionTitle}>📝 Submitted To:</Text>
+                <Text style={styles.instructorText}>Jay Ian Camelotes</Text>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowAboutModal(false)}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -146,27 +202,31 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   header: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    right: 24,
+    zIndex: 10,
+  },
+  infoButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+   
+    justifyContent: 'center',
+    alignItems: 'center',
+   
+   
+  },
+  infoButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  logoSection: {
     alignItems: 'center',
     marginBottom: 48,
   },
   logoContainer: {
     marginBottom: 24,
-  },
-  logoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#FF6B35',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  logoText: {
-    fontSize: 32,
   },
   logo: {
     width: 80,
@@ -273,5 +333,66 @@ const styles = StyleSheet.create({
   link: {
     color: '#FF6B35',
     fontWeight: '700',
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D2D2D',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  aboutSection: {
+    marginBottom: 24,
+  },
+  aboutSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2D2D2D',
+    marginBottom: 12,
+  },
+  membersList: {
+    marginLeft: 8,
+  },
+  memberItem: {
+    fontSize: 14,
+    color: '#6c757d',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  instructorText: {
+    fontSize: 16,
+    color: '#FF6B35',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  closeButton: {
+    backgroundColor: '#FF6B35',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
