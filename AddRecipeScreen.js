@@ -6,16 +6,15 @@ import {
     TouchableOpacity,
     StyleSheet,
     ScrollView,
-    Alert,
-    SafeAreaView,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    Modal,
+    Animated
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FirebaseService } from './FirebaseService';
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "./firebaseConfig";
-
-
 
 export default function AddRecipeScreen({ navigation }) {
     const [title, setTitle] = useState('');
@@ -28,6 +27,70 @@ export default function AddRecipeScreen({ navigation }) {
     const [tags, setTags] = useState([]);
     const [newTag, setNewTag] = useState('');
     const [loading, setLoading] = useState(false);
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertTitle, setAlertTitle] = useState('');
+    const [alertMessage, setAlertMessage] = useState('');
+    const [alertType, setAlertType] = useState('success');
+    const [fadeAnim] = useState(new Animated.Value(0));
+    const [scaleAnim] = useState(new Animated.Value(0.8));
+
+    const showCustomAlert = (title, message, type = 'error') => {
+        setAlertTitle(title);
+        setAlertMessage(message);
+        setAlertType(type);
+        setAlertVisible(true);
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }),
+            Animated.timing(scaleAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            })
+        ]).start();
+    };
+
+    const hideCustomAlert = () => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+            Animated.timing(scaleAnim, {
+                toValue: 0.8,
+                duration: 200,
+                useNativeDriver: true,
+            })
+        ]).start(() => {
+            setAlertVisible(false);
+        });
+    };
+
+    const getAlertStyles = () => {
+        switch (alertType) {
+            case 'success':
+                return {
+                    backgroundColor: '#F0FDF4',
+                    borderColor: '#BBF7D0',
+                    icon: '✅',
+                    titleColor: '#16A34A',
+                    buttonColor: '#16A34A'
+                };
+            case 'error':
+            default:
+                return {
+                    backgroundColor: '#FEF2F2',
+                    borderColor: '#FECACA',
+                    icon: '❌',
+                    titleColor: '#DC2626',
+                    buttonColor: '#DC2626'
+                };
+        }
+    };
 
     const addIngredient = () => {
         setIngredients([...ingredients, '']);
@@ -56,7 +119,6 @@ export default function AddRecipeScreen({ navigation }) {
         setInstructions(newInstructions);
     };
 
-    
     const removeInstruction = (index) => {
         if (instructions.length > 1) {
             const newInstructions = instructions.filter((_, i) => i !== index);
@@ -71,93 +133,83 @@ export default function AddRecipeScreen({ navigation }) {
         }
     };
 
-
-    // Add this temporary test in your component
-useEffect(() => {
-    console.log("AddRecipeScreen mounted - checking FirebaseService");
-}, []);
+    useEffect(() => {
+        console.log("AddRecipeScreen mounted - checking FirebaseService");
+    }, []);
 
     const removeTag = (index) => {
         const newTags = tags.filter((_, i) => i !== index);
         setTags(newTags);
     };
 
- const handleSaveRecipe = async () => {
-    // Validation checks
-    if (!title.trim()) {
-        Alert.alert('Error', 'Please enter a recipe title');
-        return;
-    }
-
-    const filteredIngredients = ingredients.filter(ing => ing.trim());
-    const filteredInstructions = instructions.filter(inst => inst.trim());
-
-    if (filteredIngredients.length === 0) {
-        Alert.alert('Error', 'Please add at least one ingredient');
-        return;
-    }
-
-    if (filteredInstructions.length === 0) {
-        Alert.alert('Error', 'Please add at least one instruction');
-        return;
-    }
-
-    setLoading(true);
-    try {
-        const recipeData = {
-            title: title.trim(),
-            description: description.trim(),
-            prepTime: parseInt(prepTime) || 0,
-            cookTime: parseInt(cookTime) || 0,
-            servings: parseInt(servings) || 1,
-            ingredients: filteredIngredients,
-            instructions: filteredInstructions,
-            tags: tags,
-            totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
-            // Note: FirebaseService.addRecipe should add userId, createdAt, etc.
-        };
-
-        console.log('📝 Saving recipe:', recipeData.title);
-        await FirebaseService.addRecipe(recipeData);
-
-        Alert.alert(
-            'Success 🎉', 
-            'Recipe added successfully!',
-            [{ 
-                text: 'OK', 
-                onPress: () => {
-                    // Reset form and navigate back
-                    setTitle('');
-                    setDescription('');
-                    setPrepTime('');
-                    setCookTime('');
-                    setServings('');
-                    setIngredients(['']);
-                    setInstructions(['']);
-                    setTags([]);
-                    navigation.goBack();
-                }
-            }]
-        );
-    } catch (error) {
-        console.error('❌ Error saving recipe:', error);
-        let errorMessage = 'Failed to save recipe. Please try again.';
-        
-        if (error.message.includes('permission')) {
-            errorMessage = 'Permission denied. Please check if you are logged in.';
-        } else if (error.message.includes('network') || error.message.includes('offline')) {
-            errorMessage = 'Network error. Please check your internet connection.';
-        } else if (error.message.includes('quota')) {
-            errorMessage = 'Storage limit exceeded. Please try again later.';
+    const handleSaveRecipe = async () => {
+        if (!title.trim()) {
+            showCustomAlert('Error', 'Please enter a recipe title');
+            return;
         }
-        
-        Alert.alert('Error', errorMessage);
-    } finally {
-        setLoading(false);
-    }
-};
-    
-   
+
+        const filteredIngredients = ingredients.filter(ing => ing.trim());
+        const filteredInstructions = instructions.filter(inst => inst.trim());
+
+        if (filteredIngredients.length === 0) {
+            showCustomAlert('Error', 'Please add at least one ingredient');
+            return;
+        }
+
+        if (filteredInstructions.length === 0) {
+            showCustomAlert('Error', 'Please add at least one instruction');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const recipeData = {
+                title: title.trim(),
+                description: description.trim(),
+                prepTime: parseInt(prepTime) || 0,
+                cookTime: parseInt(cookTime) || 0,
+                servings: parseInt(servings) || 1,
+                ingredients: filteredIngredients,
+                instructions: filteredInstructions,
+                tags: tags,
+                totalTime: (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0),
+            };
+
+            console.log('📝 Saving recipe:', recipeData.title);
+            await FirebaseService.addRecipe(recipeData);
+
+            showCustomAlert('Success 🎉', 'Recipe added successfully!', 'success');
+            
+            setTimeout(() => {
+                setTitle('');
+                setDescription('');
+                setPrepTime('');
+                setCookTime('');
+                setServings('');
+                setIngredients(['']);
+                setInstructions(['']);
+                setTags([]);
+                navigation.goBack();
+            }, 2000);
+        } catch (error) {
+            console.error('❌ Error saving recipe:', error);
+            let errorMessage = 'Failed to save recipe. Please try again.';
+            
+            if (error.message.includes('permission')) {
+                errorMessage = 'Permission denied. Please check if you are logged in.';
+            } else if (error.message.includes('network') || error.message.includes('offline')) {
+                errorMessage = 'Network error. Please check your internet connection.';
+            } else if (error.message.includes('quota')) {
+                errorMessage = 'Storage limit exceeded. Please try again later.';
+            }
+            
+            showCustomAlert('Error', errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const alertStyles = getAlertStyles();
 
     return (
         <SafeAreaView style={styles.container}>
@@ -170,7 +222,6 @@ useEffect(() => {
                         <Text style={styles.title}>Add New Recipe</Text>
                     </View>
 
-                    {/* Recipe Title */}
                     <View style={styles.section}>
                         <Text style={styles.label}>Recipe Title *</Text>
                         <TextInput
@@ -182,7 +233,6 @@ useEffect(() => {
                         />
                     </View>
 
-                    {/* Description */}
                     <View style={styles.section}>
                         <Text style={styles.label}>Description</Text>
                         <TextInput
@@ -196,7 +246,6 @@ useEffect(() => {
                         />
                     </View>
 
-                    {/* Times and Servings */}
                     <View style={styles.section}>
                         <Text style={styles.label}>Prep Time (min)    Cook Time (min)    Servings</Text>
                         <View style={styles.rowInputs}>
@@ -227,7 +276,6 @@ useEffect(() => {
                         </View>
                     </View>
 
-                    {/* Ingredients */}
                     <View style={styles.section}>
                         <Text style={styles.label}>Ingredients *</Text>
                         {ingredients.map((ingredient, index) => (
@@ -254,7 +302,6 @@ useEffect(() => {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Instructions */}
                     <View style={styles.section}>
                         <Text style={styles.label}>Instructions *</Text>
                         {instructions.map((instruction, index) => (
@@ -283,7 +330,6 @@ useEffect(() => {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Tags */}
                     <View style={styles.section}>
                         <Text style={styles.label}>Tags</Text>
                         <View style={styles.tagInputContainer}>
@@ -311,7 +357,6 @@ useEffect(() => {
                         </View>
                     </View>
 
-                    {/* Buttons */}
                     <View style={styles.buttonsContainer}>
                         <TouchableOpacity 
                             style={[styles.button, styles.cancelButton]}
@@ -328,6 +373,50 @@ useEffect(() => {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <Modal
+                visible={alertVisible}
+                transparent
+                animationType="none"
+                onRequestClose={hideCustomAlert}
+            >
+                <View style={styles.alertOverlay}>
+                    <Animated.View 
+                        style={[
+                            styles.alertContainer,
+                            {
+                                opacity: fadeAnim,
+                                transform: [{ scale: scaleAnim }],
+                                backgroundColor: alertStyles.backgroundColor,
+                                borderColor: alertStyles.borderColor,
+                            }
+                        ]}
+                    >
+                        <View style={styles.alertContent}>
+                            <View style={styles.alertHeader}>
+                                <Text style={styles.alertIcon}>{alertStyles.icon}</Text>
+                                <Text style={[styles.alertTitle, { color: alertStyles.titleColor }]}>
+                                    {alertTitle}
+                                </Text>
+                                <TouchableOpacity onPress={hideCustomAlert} style={styles.closeButton}>
+                                    <Text style={styles.closeIcon}>✕</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            <Text style={styles.alertMessage}>{alertMessage}</Text>
+                            
+                            <View style={styles.alertButtons}>
+                                <TouchableOpacity 
+                                    style={[styles.alertButton, { backgroundColor: alertStyles.buttonColor }]}
+                                    onPress={hideCustomAlert}
+                                >
+                                    <Text style={styles.alertButtonText}>OK</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </Animated.View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -496,6 +585,71 @@ const styles = StyleSheet.create({
     },
     saveButtonText: {
         color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    alertOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    alertContainer: {
+        width: '90%',
+        maxWidth: 400,
+        borderRadius: 16,
+        borderWidth: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    alertContent: {
+        padding: 24,
+    },
+    alertHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    alertIcon: {
+        fontSize: 24,
+        marginRight: 12,
+    },
+    alertTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        flex: 1,
+    },
+    closeButton: {
+        padding: 4,
+    },
+    closeIcon: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#6B7280',
+    },
+    alertMessage: {
+        fontSize: 16,
+        lineHeight: 22,
+        color: '#374151',
+        marginBottom: 24,
+    },
+    alertButtons: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+    },
+    alertButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 8,
+        minWidth: 80,
+        alignItems: 'center',
+    },
+    alertButtonText: {
+        color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
     },

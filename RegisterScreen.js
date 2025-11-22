@@ -10,7 +10,9 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
-  Image
+  Image,
+  Modal,
+  Animated
 } from 'react-native';
 import { FirebaseService } from './FirebaseService';
 
@@ -20,25 +22,69 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('success');
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [scaleAnim] = useState(new Animated.Value(0.8));
+
+  const showCustomAlert = (title, message, type = 'error') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const hideCustomAlert = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setAlertVisible(false);
+    });
+  };
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showCustomAlert('Error', 'Please fill in all fields', 'error');
       return;
     }
     
     if (password.length < 6) {
-      Alert.alert('Error', 'Password should be at least 6 characters');
+      showCustomAlert('Error', 'Password should be at least 6 characters', 'error');
       return;
     }
     
     setLoading(true);
     try {
       const user = await FirebaseService.registerUser(name, email, password);
-      Alert.alert('Success', `Welcome to Recipe Book, ${user.name}!`);
-      navigation.replace('Login');
+      showCustomAlert('Success', `Welcome to Recipe Book, ${user.name}!`, 'success');
+      setTimeout(() => {
+        navigation.replace('Login');
+      }, 2000);
     } catch (err) {
-      Alert.alert('Registration Failed', err.message);
+      showCustomAlert('Registration Failed', err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -48,6 +94,30 @@ export default function RegisterScreen({ navigation }) {
     setShowPassword(!showPassword);
   };
 
+  const getAlertStyles = () => {
+    switch (alertType) {
+      case 'success':
+        return {
+          backgroundColor: '#F0FDF4',
+          borderColor: '#BBF7D0',
+          icon: '✅',
+          titleColor: '#16A34A',
+          buttonColor: '#16A34A'
+        };
+      case 'error':
+      default:
+        return {
+          backgroundColor: '#FEF2F2',
+          borderColor: '#FECACA',
+          icon: '❌',
+          titleColor: '#DC2626',
+          buttonColor: '#DC2626'
+        };
+    }
+  };
+
+  const alertStyles = getAlertStyles();
+
   return (
     <KeyboardAvoidingView 
       style={styles.container}
@@ -55,19 +125,14 @@ export default function RegisterScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Header with Logo */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
-              {/* Replace with your actual logo */}
               <Image source={require('./assets/recipe.png')} style={styles.logo} />
-              {/* If you have your icon-logo.png: */}
-              {/* <Image source={require('./assets/icon-logo.png')} style={styles.logo} /> */}
             </View>
             <Text style={styles.title}>Join Recipe Box</Text>
             <Text style={styles.subtitle}>Create your account and start sharing recipes</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Full Name</Text>
@@ -133,7 +198,6 @@ export default function RegisterScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               Already have an account?{' '}
@@ -147,6 +211,50 @@ export default function RegisterScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={alertVisible}
+        transparent
+        animationType="none"
+        onRequestClose={hideCustomAlert}
+      >
+        <View style={styles.alertOverlay}>
+          <Animated.View 
+            style={[
+              styles.alertContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+                backgroundColor: alertStyles.backgroundColor,
+                borderColor: alertStyles.borderColor,
+              }
+            ]}
+          >
+            <View style={styles.alertContent}>
+              <View style={styles.alertHeader}>
+                <Text style={styles.alertIcon}>{alertStyles.icon}</Text>
+                <Text style={[styles.alertTitle, { color: alertStyles.titleColor }]}>
+                  {alertTitle}
+                </Text>
+                <TouchableOpacity onPress={hideCustomAlert} style={styles.closeButton}>
+                  <Text style={styles.closeIcon}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.alertMessage}>{alertMessage}</Text>
+              
+              <View style={styles.alertButtons}>
+                <TouchableOpacity 
+                  style={[styles.alertButton, { backgroundColor: alertStyles.buttonColor }]}
+                  onPress={hideCustomAlert}
+                >
+                  <Text style={styles.alertButtonText}>OK</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -299,5 +407,70 @@ const styles = StyleSheet.create({
   link: {
     color: '#FF6B35',
     fontWeight: '700',
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertContainer: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 16,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  alertContent: {
+    padding: 24,
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  closeIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6B7280',
+  },
+  alertMessage: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#374151',
+    marginBottom: 24,
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  alertButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  alertButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

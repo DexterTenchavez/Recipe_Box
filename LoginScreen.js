@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   View, 
   TextInput, 
-  Alert, 
   StyleSheet, 
   Text, 
   TouchableOpacity, 
@@ -11,9 +10,196 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  Modal
+  Modal,
+  Animated,
+  Easing
 } from 'react-native';
 import { FirebaseService } from './FirebaseService';
+
+const CustomAlert = ({ visible, title, message, type = 'warning', onClose }) => {
+  const [show, setShow] = useState(visible);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      setShow(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      handleClose();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setShow(false);
+      onClose?.();
+    });
+  };
+
+  const getTypeStyles = () => {
+    switch (type) {
+      case 'error':
+        return {
+          backgroundColor: '#FEF2F2',
+          borderColor: '#FECACA',
+          icon: '❌',
+          titleColor: '#DC2626'
+        };
+      case 'success':
+        return {
+          backgroundColor: '#F0FDF4',
+          borderColor: '#BBF7D0',
+          icon: '✅',
+          titleColor: '#16A34A'
+        };
+      case 'info':
+        return {
+          backgroundColor: '#F0F9FF',
+          borderColor: '#BAE6FD',
+          icon: 'ℹ️',
+          titleColor: '#0284C7'
+        };
+      case 'warning':
+      default:
+        return {
+          backgroundColor: '#FFFBEB',
+          borderColor: '#FDE68A',
+          icon: '⚠️',
+          titleColor: '#D97706'
+        };
+    }
+  };
+
+  const typeStyles = getTypeStyles();
+
+  if (!show) return null;
+
+  return (
+    <Modal transparent visible={true} animationType="none">
+      <View style={alertStyles.alertOverlay}>
+        <Animated.View 
+          style={[
+            alertStyles.alertContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+              backgroundColor: typeStyles.backgroundColor,
+              borderColor: typeStyles.borderColor,
+            }
+          ]}
+        >
+          <View style={alertStyles.alertContent}>
+            <View style={alertStyles.alertHeader}>
+              <Text style={alertStyles.alertIcon}>{typeStyles.icon}</Text>
+              <Text style={[alertStyles.alertTitle, { color: typeStyles.titleColor }]}>
+                {title}
+              </Text>
+            </View>
+            
+            <Text style={alertStyles.alertMessage}>{message}</Text>
+            
+            <View style={alertStyles.alertButtons}>
+              <TouchableOpacity 
+                style={[alertStyles.alertButton, alertStyles.alertButtonPrimary]}
+                onPress={handleClose}
+              >
+                <Text style={alertStyles.alertButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const alertStyles = StyleSheet.create({
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertContainer: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 16,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  alertContent: {
+    padding: 24,
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  alertMessage: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#374151',
+    marginBottom: 24,
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  alertButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  alertButtonPrimary: {
+    backgroundColor: '#FF6B35',
+  },
+  alertButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -21,20 +207,33 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('warning');
+
+  const showCustomAlert = (title, message, type = 'warning') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      showCustomAlert('Error', 'Please enter both email and password', 'error');
       return;
     }
     
     setLoading(true);
     try {
       const user = await FirebaseService.loginUser(email, password);
-      Alert.alert('Welcome!', `Logged in as ${user.name}`);
-      navigation.replace('Home');
+      showCustomAlert('Welcome!', `Logged in as ${user.name}`, 'success');
+      setTimeout(() => {
+        navigation.replace('Home');
+      }, 1500);
     } catch (err) {
-      Alert.alert('Login Failed', err.message);
+      showCustomAlert('Login Failed', err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -51,7 +250,6 @@ export default function LoginScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Header with Info Button */}
           <View style={styles.header}>
             <TouchableOpacity 
               style={styles.infoButton}
@@ -61,19 +259,14 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Logo and Title */}
           <View style={styles.logoSection}>
             <View style={styles.logoContainer}>
-              {/* Replace with your actual logo */}
               <Image source={require('./assets/recipe.png')} style={styles.logo} />
-              {/* If you have your icon-logo.png: */}
-              {/* <Image source={require('./assets/icon-logo.png')} style={styles.logo} /> */}
             </View>
             <Text style={styles.title}>Sign in</Text>
             <Text style={styles.subtitle}>Sign in to your Recipe Box account</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email Address</Text>
@@ -126,7 +319,6 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               Don't have an account?{' '}
@@ -141,7 +333,6 @@ export default function LoginScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* About Info Modal */}
       <Modal
         visible={showAboutModal}
         animationType="slide"
@@ -184,6 +375,14 @@ export default function LoginScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      <CustomAlert
+        visible={showAlert}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setShowAlert(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -211,11 +410,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-   
     justifyContent: 'center',
     alignItems: 'center',
-   
-   
   },
   infoButtonText: {
     fontSize: 20,
@@ -334,7 +530,6 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     fontWeight: '700',
   },
-  // Modal Styles
   modalContainer: {
     flex: 1,
   },

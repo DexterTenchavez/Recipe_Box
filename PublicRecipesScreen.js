@@ -5,13 +5,229 @@ import {
     StyleSheet, 
     TouchableOpacity, 
     FlatList, 
-    Alert,
     ActivityIndicator,
-    TextInput
+    TextInput,
+    Animated,
+    Easing,
+    Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FirebaseService } from './FirebaseService';
 import * as Speech from 'expo-speech';
+
+const CustomAlert = ({ visible, title, message, type = 'warning', buttons = [], onClose }) => {
+  const [show, setShow] = useState(visible);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      setShow(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      handleClose();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setShow(false);
+      onClose?.();
+    });
+  };
+
+  const getTypeStyles = () => {
+    switch (type) {
+      case 'error':
+        return {
+          backgroundColor: '#FEF2F2',
+          borderColor: '#FECACA',
+          icon: '❌',
+          titleColor: '#DC2626'
+        };
+      case 'success':
+        return {
+          backgroundColor: '#F0FDF4',
+          borderColor: '#BBF7D0',
+          icon: '✅',
+          titleColor: '#16A34A'
+        };
+      case 'info':
+        return {
+          backgroundColor: '#F0F9FF',
+          borderColor: '#BAE6FD',
+          icon: 'ℹ️',
+          titleColor: '#0284C7'
+        };
+      case 'warning':
+      default:
+        return {
+          backgroundColor: '#FFFBEB',
+          borderColor: '#FDE68A',
+          icon: '⚠️',
+          titleColor: '#D97706'
+        };
+    }
+  };
+
+  const typeStyles = getTypeStyles();
+
+  if (!show) return null;
+
+  return (
+    <Modal transparent visible={true} animationType="none">
+      <View style={alertStyles.alertOverlay}>
+        <Animated.View 
+          style={[
+            alertStyles.alertContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+              backgroundColor: typeStyles.backgroundColor,
+              borderColor: typeStyles.borderColor,
+            }
+          ]}
+        >
+          <View style={alertStyles.alertContent}>
+            <View style={alertStyles.alertHeader}>
+              <Text style={alertStyles.alertIcon}>{typeStyles.icon}</Text>
+              <Text style={[alertStyles.alertTitle, { color: typeStyles.titleColor }]}>
+                {title}
+              </Text>
+            </View>
+            
+            <Text style={alertStyles.alertMessage}>{message}</Text>
+            
+            <View style={alertStyles.alertButtons}>
+              {buttons.length === 0 ? (
+                <TouchableOpacity 
+                  style={[alertStyles.alertButton, alertStyles.alertButtonPrimary]}
+                  onPress={handleClose}
+                >
+                  <Text style={alertStyles.alertButtonText}>OK</Text>
+                </TouchableOpacity>
+              ) : (
+                buttons.map((button, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      alertStyles.alertButton,
+                      button.style === 'cancel' ? alertStyles.alertButtonCancel : 
+                      button.style === 'destructive' ? alertStyles.alertButtonDestructive : 
+                      alertStyles.alertButtonPrimary
+                    ]}
+                    onPress={() => {
+                      button.onPress?.();
+                      handleClose();
+                    }}
+                  >
+                    <Text style={alertStyles.alertButtonText}>
+                      {button.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const alertStyles = StyleSheet.create({
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertContainer: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 16,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  alertContent: {
+    padding: 24,
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  alertMessage: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#374151',
+    marginBottom: 24,
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  alertButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  alertButtonPrimary: {
+    backgroundColor: '#FF6B35',
+  },
+  alertButtonCancel: {
+    backgroundColor: '#6B7280',
+  },
+  alertButtonDestructive: {
+    backgroundColor: '#DC2626',
+  },
+  alertButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 export default function PublicRecipesScreen({ navigation }) {
     const [recipes, setRecipes] = useState([]);
@@ -20,11 +236,23 @@ export default function PublicRecipesScreen({ navigation }) {
     const [speakingRecipeId, setSpeakingRecipeId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [pinnedRecipes, setPinnedRecipes] = useState(new Set());
+    const [showAlert, setShowAlert] = useState(false);
+    const [alertTitle, setAlertTitle] = useState('');
+    const [alertMessage, setAlertMessage] = useState('');
+    const [alertType, setAlertType] = useState('warning');
+    const [alertButtons, setAlertButtons] = useState([]);
+
+    const showCustomAlert = (title, message, type = 'warning', buttons = []) => {
+        setAlertTitle(title);
+        setAlertMessage(message);
+        setAlertType(type);
+        setAlertButtons(buttons);
+        setShowAlert(true);
+    };
 
     useEffect(() => {
         loadPublicRecipes();
         
-        // Clean up speech when component unmounts
         return () => {
             Speech.stop();
         };
@@ -43,13 +271,12 @@ export default function PublicRecipesScreen({ navigation }) {
             
             setRecipes(publicRecipes);
             
-            // Load pinned recipes to show which ones are already pinned
             const pinned = await FirebaseService.getPinnedRecipes();
             const pinnedIds = new Set(pinned.map(recipe => recipe.originalRecipeId || recipe.id));
             setPinnedRecipes(pinnedIds);
         } catch (error) {
             console.error('❌ Error loading public recipes:', error);
-            Alert.alert('Error', 'Failed to load public recipes: ' + error.message);
+            showCustomAlert('Error', 'Failed to load public recipes: ' + error.message, 'error');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -72,20 +299,19 @@ export default function PublicRecipesScreen({ navigation }) {
                 ingredients: ["Test ingredient 1", "Test ingredient 2"],
                 instructions: ["Test instruction 1", "Test instruction 2"],
                 tags: ["test", "public"],
-                isShared: true // This makes it public
+                isShared: true
             };
             
             await FirebaseService.addRecipe(testRecipe);
-            Alert.alert('Success', 'Test public recipe created!');
+            showCustomAlert('Success', 'Test public recipe created!', 'success');
             loadPublicRecipes();
         } catch (error) {
-            Alert.alert('Error', 'Failed to create test recipe: ' + error.message);
+            showCustomAlert('Error', 'Failed to create test recipe: ' + error.message, 'error');
         }
     };
 
     const speakRecipePreview = async (recipe) => {
         try {
-            // Stop any currently speaking recipe
             if (speakingRecipeId) {
                 Speech.stop();
                 if (speakingRecipeId === recipe.id) {
@@ -125,7 +351,7 @@ export default function PublicRecipesScreen({ navigation }) {
         } catch (error) {
             console.error('Speech error:', error);
             setSpeakingRecipeId(null);
-            Alert.alert('Error', 'Failed to read recipe preview: ' + error.message);
+            showCustomAlert('Error', 'Failed to read recipe preview: ' + error.message, 'error');
         }
     };
 
@@ -136,28 +362,24 @@ export default function PublicRecipesScreen({ navigation }) {
 
     const handlePinRecipe = async (recipe) => {
         try {
-            // Check if already pinned locally first
             if (pinnedRecipes.has(recipe.id)) {
-                Alert.alert('Already Pinned', 'This recipe is already pinned to your home screen!');
+                showCustomAlert('Already Pinned', 'This recipe is already pinned to your home screen!', 'info');
                 return;
             }
 
             await FirebaseService.pinRecipe(recipe);
             
-            // Update local state
             setPinnedRecipes(prev => new Set(prev).add(recipe.id));
             
-            Alert.alert('Success', 'Recipe pinned to your home screen!');
+            showCustomAlert('Success', 'Recipe pinned to your home screen!', 'success');
         } catch (error) {
             console.error('Pin error:', error);
             
-            // Handle specific error cases
             if (error.message && error.message.includes('already pinned')) {
-                Alert.alert('Already Pinned', 'This recipe is already pinned to your home screen!');
-                // Update local state to reflect reality
+                showCustomAlert('Already Pinned', 'This recipe is already pinned to your home screen!', 'info');
                 setPinnedRecipes(prev => new Set(prev).add(recipe.id));
             } else {
-                Alert.alert('Error', 'Failed to pin recipe: ' + (error.message || 'Unknown error'));
+                showCustomAlert('Error', 'Failed to pin recipe: ' + (error.message || 'Unknown error'), 'error');
             }
         }
     };
@@ -240,7 +462,6 @@ export default function PublicRecipesScreen({ navigation }) {
                 )}
             </View>
             
-            {/* Voice Hint */}
             <View style={styles.voiceHint}>
                 <Text style={styles.voiceHintText}>
                     {speakingRecipeId === item.id ? 
@@ -253,7 +474,6 @@ export default function PublicRecipesScreen({ navigation }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity 
                     style={styles.backButton}
@@ -286,7 +506,6 @@ export default function PublicRecipesScreen({ navigation }) {
                 </View>
             </View>
 
-            {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <TextInput
                     style={styles.searchInput}
@@ -305,7 +524,6 @@ export default function PublicRecipesScreen({ navigation }) {
                 )}
             </View>
 
-            {/* Voice Instructions */}
             <View style={styles.voiceInstructions}>
                 <Text style={styles.voiceInstructionsText}>
                     🔊 Tap speaker icon or press and hold any recipe to hear a preview
@@ -315,7 +533,6 @@ export default function PublicRecipesScreen({ navigation }) {
                 </Text>
             </View>
 
-            {/* Content */}
             <View style={styles.content}>
                 {loading ? (
                     <View style={styles.centerContent}>
@@ -359,6 +576,15 @@ export default function PublicRecipesScreen({ navigation }) {
                     />
                 )}
             </View>
+
+            <CustomAlert
+                visible={showAlert}
+                title={alertTitle}
+                message={alertMessage}
+                type={alertType}
+                buttons={alertButtons}
+                onClose={() => setShowAlert(false)}
+            />
         </SafeAreaView>
     );
 }

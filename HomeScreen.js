@@ -4,7 +4,6 @@ import {
     Text, 
     StyleSheet, 
     TouchableOpacity, 
-    Alert,
     Share,
     ActivityIndicator,
     TextInput,
@@ -13,12 +12,228 @@ import {
     RefreshControl,
     KeyboardAvoidingView,
     Platform,
-    ScrollView
+    ScrollView,
+    Animated,
+    Easing
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { FirebaseService } from './FirebaseService';
 import { auth } from './firebaseConfig';
+
+const CustomAlert = ({ visible, title, message, type = 'warning', buttons = [], onClose }) => {
+  const [show, setShow] = useState(visible);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      setShow(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.back(1.5)),
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      handleClose();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      setShow(false);
+      onClose?.();
+    });
+  };
+
+  const getTypeStyles = () => {
+    switch (type) {
+      case 'error':
+        return {
+          backgroundColor: '#FEF2F2',
+          borderColor: '#FECACA',
+          icon: '❌',
+          titleColor: '#DC2626'
+        };
+      case 'success':
+        return {
+          backgroundColor: '#F0FDF4',
+          borderColor: '#BBF7D0',
+          icon: '✅',
+          titleColor: '#16A34A'
+        };
+      case 'info':
+        return {
+          backgroundColor: '#F0F9FF',
+          borderColor: '#BAE6FD',
+          icon: 'ℹ️',
+          titleColor: '#0284C7'
+        };
+      case 'warning':
+      default:
+        return {
+          backgroundColor: '#FFFBEB',
+          borderColor: '#FDE68A',
+          icon: '⚠️',
+          titleColor: '#D97706'
+        };
+    }
+  };
+
+  const typeStyles = getTypeStyles();
+
+  if (!show) return null;
+
+  return (
+    <Modal transparent visible={true} animationType="none">
+      <View style={alertStyles.alertOverlay}>
+        <Animated.View 
+          style={[
+            alertStyles.alertContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+              backgroundColor: typeStyles.backgroundColor,
+              borderColor: typeStyles.borderColor,
+            }
+          ]}
+        >
+          <View style={alertStyles.alertContent}>
+            <View style={alertStyles.alertHeader}>
+              <Text style={alertStyles.alertIcon}>{typeStyles.icon}</Text>
+              <Text style={[alertStyles.alertTitle, { color: typeStyles.titleColor }]}>
+                {title}
+              </Text>
+            </View>
+            
+            <Text style={alertStyles.alertMessage}>{message}</Text>
+            
+            <View style={alertStyles.alertButtons}>
+              {buttons.length === 0 ? (
+                <TouchableOpacity 
+                  style={[alertStyles.alertButton, alertStyles.alertButtonPrimary]}
+                  onPress={handleClose}
+                >
+                  <Text style={alertStyles.alertButtonText}>OK</Text>
+                </TouchableOpacity>
+              ) : (
+                buttons.map((button, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      alertStyles.alertButton,
+                      button.style === 'cancel' ? alertStyles.alertButtonCancel : 
+                      button.style === 'destructive' ? alertStyles.alertButtonDestructive : 
+                      alertStyles.alertButtonPrimary
+                    ]}
+                    onPress={() => {
+                      button.onPress?.();
+                      handleClose();
+                    }}
+                  >
+                    <Text style={alertStyles.alertButtonText}>
+                      {button.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const alertStyles = StyleSheet.create({
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertContainer: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 16,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  alertContent: {
+    padding: 24,
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  alertMessage: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: '#374151',
+    marginBottom: 24,
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  alertButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  alertButtonPrimary: {
+    backgroundColor: '#FF6B35',
+  },
+  alertButtonCancel: {
+    backgroundColor: '#6B7280',
+  },
+  alertButtonDestructive: {
+    backgroundColor: '#DC2626',
+  },
+  alertButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 export default function HomeScreen({ navigation }) {
     const [recipes, setRecipes] = useState([]);
@@ -35,6 +250,19 @@ export default function HomeScreen({ navigation }) {
     const [shareMessage, setShareMessage] = useState('');
     const [allUsers, setAllUsers] = useState([]);
     const [showAboutModal, setShowAboutModal] = useState(false);
+    const [showAlert, setShowAlert] = useState(false);
+    const [alertTitle, setAlertTitle] = useState('');
+    const [alertMessage, setAlertMessage] = useState('');
+    const [alertType, setAlertType] = useState('warning');
+    const [alertButtons, setAlertButtons] = useState([]);
+
+    const showCustomAlert = (title, message, type = 'warning', buttons = []) => {
+        setAlertTitle(title);
+        setAlertMessage(message);
+        setAlertType(type);
+        setAlertButtons(buttons);
+        setShowAlert(true);
+    };
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -105,7 +333,7 @@ Shared from Recipe Book App 🍳
                 title: `Share Recipe: ${recipe.title}`
             });
         } catch (error) {
-            Alert.alert('Error', 'Failed to share recipe');
+            showCustomAlert('Error', 'Failed to share recipe', 'error');
         }
     };
 
@@ -118,7 +346,7 @@ Shared from Recipe Book App 🍳
 
     const shareWithUser = async () => {
         if (!shareEmail.trim()) {
-            Alert.alert('Error', 'Please enter a user email');
+            showCustomAlert('Error', 'Please enter a user email', 'error');
             return;
         }
 
@@ -130,13 +358,13 @@ Shared from Recipe Book App 🍳
                 shareMessage.trim() || `Check out this recipe: ${selectedRecipe.title}`
             );
             
-            Alert.alert('Success', `Recipe shared with ${shareEmail}`);
+            showCustomAlert('Success', `Recipe shared with ${shareEmail}`, 'success');
             setShowUserShareModal(false);
             setShareEmail('');
             setShareMessage('');
             
         } catch (error) {
-            Alert.alert('Error', error.message);
+            showCustomAlert('Error', error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -170,9 +398,10 @@ Shared from Recipe Book App 🍳
     };
 
     const handleFixData = async () => {
-        Alert.alert(
+        showCustomAlert(
             'Fix Data Types',
             'This will fix any recipes with incorrect data types.',
+            'warning',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -181,10 +410,10 @@ Shared from Recipe Book App 🍳
                         try {
                             setLoading(true);
                             const result = await FirebaseService.fixIsSharedDataTypes();
-                            Alert.alert('Success', `Fixed ${result.count} recipes!`);
+                            showCustomAlert('Success', `Fixed ${result.count} recipes!`, 'success');
                             loadAllData();
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to fix data: ' + error.message);
+                            showCustomAlert('Error', 'Failed to fix data: ' + error.message, 'error');
                         } finally {
                             setLoading(false);
                         }
@@ -195,9 +424,10 @@ Shared from Recipe Book App 🍳
     };
 
     const handleLogout = async () => {
-        Alert.alert(
+        showCustomAlert(
             'Logout',
             'Are you sure you want to logout?',
+            'warning',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -207,7 +437,7 @@ Shared from Recipe Book App 🍳
                             await FirebaseService.logoutUser();
                             navigation.replace('Login');
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to logout: ' + error.message);
+                            showCustomAlert('Error', 'Failed to logout: ' + error.message, 'error');
                         }
                     }
                 }
@@ -219,14 +449,14 @@ Shared from Recipe Book App 🍳
         try {
             if (recipe.isShared) {
                 await FirebaseService.unshareRecipe(recipe.id);
-                Alert.alert('Success', 'Recipe unpublished successfully!');
+                showCustomAlert('Success', 'Recipe unpublished successfully!', 'success');
             } else {
                 await FirebaseService.shareRecipe(recipe.id);
-                Alert.alert('Success', 'Recipe published!');
+                showCustomAlert('Success', 'Recipe published!', 'success');
             }
             loadRecipes();
         } catch (error) {
-            Alert.alert('Error', 'Failed to update recipe publishing: ' + error.message);
+            showCustomAlert('Error', 'Failed to update recipe publishing: ' + error.message, 'error');
         }
     };
 
@@ -234,12 +464,12 @@ Shared from Recipe Book App 🍳
         try {
             await FirebaseService.unpinRecipe(pinnedRecipeId);
             loadPinnedRecipes();
-            Alert.alert('Success', 'Recipe unpinned!');
+            showCustomAlert('Success', 'Recipe unpinned!', 'success');
         } catch (error) {
             if (error.message.includes('Pinned recipe not found')) {
                 loadPinnedRecipes();
             } else {
-                Alert.alert('Error', 'Failed to unpin recipe: ' + error.message);
+                showCustomAlert('Error', 'Failed to unpin recipe: ' + error.message, 'error');
             }
         }
     };
@@ -248,9 +478,9 @@ Shared from Recipe Book App 🍳
         try {
             await FirebaseService.removeSharedRecipe(sharedRecipeId);
             loadSharedRecipes();
-            Alert.alert('Success', 'Shared recipe removed!');
+            showCustomAlert('Success', 'Shared recipe removed!', 'success');
         } catch (error) {
-            Alert.alert('Error', 'Failed to remove shared recipe: ' + error.message);
+            showCustomAlert('Error', 'Failed to remove shared recipe: ' + error.message, 'error');
         }
     };
 
@@ -565,7 +795,6 @@ Shared from Recipe Book App 🍳
                 </TouchableOpacity>
             )}
 
-            {/* User Share Modal */}
             <Modal
                 visible={showUserShareModal}
                 animationType="slide"
@@ -630,7 +859,6 @@ Shared from Recipe Book App 🍳
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* About Info Modal */}
             <Modal
                 visible={showAboutModal}
                 animationType="slide"
@@ -673,6 +901,15 @@ Shared from Recipe Book App 🍳
                     </View>
                 </View>
             </Modal>
+
+            <CustomAlert
+                visible={showAlert}
+                title={alertTitle}
+                message={alertMessage}
+                type={alertType}
+                buttons={alertButtons}
+                onClose={() => setShowAlert(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -1138,7 +1375,6 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         backgroundColor: '#28a745',
     },
-    // About Modal Styles
     aboutSection: {
         marginBottom: 24,
     },
